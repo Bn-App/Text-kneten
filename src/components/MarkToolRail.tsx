@@ -15,7 +15,7 @@ interface MarkToolRailProps {
 // as further marking-based tools ship.
 const RAIL_ITEMS: { id: MarkTool; icon: string; label: string }[] = [
   { id: 'wortfeld', icon: '🔤', label: 'Wortfelder' },
-  { id: 'sinnabschnitt', icon: '📑', label: 'Sinnabschnitte' },
+  { id: 'sinnabschnitt', icon: '📑', label: 'Beobachtungen Inhalt/Aufbau' },
   { id: 'sprache', icon: '💬', label: 'Sprache' },
 ];
 

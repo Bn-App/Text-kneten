@@ -50,7 +50,7 @@ const MARK_COLORS = [
 // as further analysis tools ship.
 const MARK_ACTIONS: { id: MarkTool; label: string }[] = [
   { id: 'wortfeld', label: 'Wortfeld' },
-  { id: 'sinnabschnitt', label: 'Sinnabschnitt' },
+  { id: 'sinnabschnitt', label: 'Beobachtungen Inhalt/Aufbau' },
   { id: 'sprache', label: 'Sprache' },
 ];
 

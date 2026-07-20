@@ -559,7 +559,7 @@ function App() {
             titleFieldLabel="Überschrift"
             summaryFieldLabel="Kurze Zusammenfassung"
             summaryPlaceholder="Worum geht es in diesem Abschnitt?"
-            emptyHint='Noch keine Sinnabschnitte markiert. Markiere im Arbeitsbereich einen Textabschnitt und wähle „Sinnabschnitt“.'
+            emptyHint='Noch keine Beobachtungen Inhalt/Aufbau markiert. Markiere im Arbeitsbereich einen Textabschnitt und wähle „Beobachtungen Inhalt/Aufbau“.'
             onRename={handleRenameSinnabschnitt}
             onUpdateSummary={handleUpdateSinnabschnittSummary}
           />

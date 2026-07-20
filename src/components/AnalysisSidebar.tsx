@@ -169,7 +169,7 @@ export function AnalysisSidebar({
               e.stopPropagation();
               onToggleInhaltDropdown();
             }}
-            title="Sinnabschnitte"
+            title="Beobachtungen Inhalt/Aufbau"
           >
             ›
           </button>
@@ -178,9 +178,9 @@ export function AnalysisSidebar({
         {inhaltDropdownOpen && (
           <div className="sidebar-dropdown">
             <div className="sidebar-dropdown-group">
-              <div className="sidebar-dropdown-header">Sinnabschnitte</div>
+              <div className="sidebar-dropdown-header">Beobachtungen Inhalt/Aufbau</div>
               {sinnabschnitte.length === 0 && (
-                <p className="sidebar-dropdown-empty">Noch keine Sinnabschnitte markiert.</p>
+                <p className="sidebar-dropdown-empty">Noch keine Beobachtungen Inhalt/Aufbau markiert.</p>
               )}
               <div className="sidebar-dropdown-sub">
                 {renderNamedGroupList(
