@@ -20,6 +20,7 @@ import { AnalysisSidebar, type NavTabId } from './components/AnalysisSidebar';
 import { HypothesePanel } from './components/panels/HypothesePanel';
 import { PlaceholderPanel } from './components/panels/PlaceholderPanel';
 import { MarkedGroupListPanel } from './components/panels/MarkedGroupListPanel';
+import { SprachlicheMittelInfo } from './components/SprachlicheMittelInfo';
 import type { HighlightMode } from './components/MarkableText';
 import { MarkToolRail, type MarkTool } from './components/MarkToolRail';
 import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImages';
@@ -566,17 +567,20 @@ function App() {
         )}
         {doc && activeView === 'formal' && <PlaceholderPanel title="Formale Aspekte" />}
         {doc && activeView === 'sprache' && (
-          <MarkedGroupListPanel
-            heading="Sprache/Stil"
-            items={doc.sprachmittel}
-            itemNounSingular="sprachliche Auffälligkeit"
-            titleFieldLabel="Bezeichnung"
-            summaryFieldLabel="Beschreibung/Wirkung"
-            summaryPlaceholder="Was fällt sprachlich auf, und welche Wirkung hat es?"
-            emptyHint='Noch keine sprachlichen Auffälligkeiten markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Sprache“.'
-            onRename={handleRenameSprachmittel}
-            onUpdateSummary={handleUpdateSprachmittelSummary}
-          />
+          <>
+            <SprachlicheMittelInfo />
+            <MarkedGroupListPanel
+              heading="Sprache/Stil"
+              items={doc.sprachmittel}
+              itemNounSingular="sprachliche Auffälligkeit"
+              titleFieldLabel="Bezeichnung"
+              summaryFieldLabel="Beschreibung/Wirkung"
+              summaryPlaceholder="Was fällt sprachlich auf, und welche Wirkung hat es?"
+              emptyHint='Noch keine sprachlichen Auffälligkeiten markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Sprache“.'
+              onRename={handleRenameSprachmittel}
+              onUpdateSummary={handleUpdateSprachmittelSummary}
+            />
+          </>
         )}
       </main>
 

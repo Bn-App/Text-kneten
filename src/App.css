@@ -814,6 +814,60 @@ main.wide {
   margin-bottom: 0;
 }
 
+/* ── Sprachliche Mittel info ── */
+
+.sm-info {
+  margin-bottom: 14px;
+}
+
+.sm-info-panel {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  padding: 4px;
+  overflow-x: auto;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.sm-info-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+  font-size: 0.78rem;
+}
+
+.sm-info-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface2);
+  text-align: left;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 8px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.sm-info-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text);
+}
+
+.sm-info-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sm-info-example {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
 /* ── Hypothesis generator ── */
 
 .hyp-generator {
