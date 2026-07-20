@@ -46,6 +46,8 @@ interface ReadOnlyTextPanelProps {
   onSetWortfeldLabel: (groupId: string, value: string) => void;
   onAssignSinnabschnitt: (groupId: string, sinnabschnittId: string) => void;
   onCreateSinnabschnittAndAssign: (groupId: string) => void;
+  onAssignSprache: (groupId: string, sprachmittelId: string) => void;
+  onCreateSprachmittelAndAssign: (groupId: string) => void;
   onExitAssignMode?: () => void;
 }
 
@@ -58,6 +60,8 @@ export function ReadOnlyTextPanel({
   onSetWortfeldLabel,
   onAssignSinnabschnitt,
   onCreateSinnabschnittAndAssign,
+  onAssignSprache,
+  onCreateSprachmittelAndAssign,
   onExitAssignMode,
 }: ReadOnlyTextPanelProps) {
   const hint =
@@ -80,6 +84,7 @@ export function ReadOnlyTextPanel({
         paragraphs={doc.paragraphs}
         marks={doc.marks}
         sinnabschnitte={doc.sinnabschnitte}
+        sprachmittel={doc.sprachmittel}
         highlightMode={highlightMode}
         interactionMode={interactionMode}
         onCreateMarks={onCreateMarks}
@@ -87,6 +92,8 @@ export function ReadOnlyTextPanel({
         onSetWortfeldLabel={onSetWortfeldLabel}
         onAssignSinnabschnitt={onAssignSinnabschnitt}
         onCreateSinnabschnittAndAssign={onCreateSinnabschnittAndAssign}
+        onAssignSprache={onAssignSprache}
+        onCreateSprachmittelAndAssign={onCreateSprachmittelAndAssign}
       />
     </div>
   );

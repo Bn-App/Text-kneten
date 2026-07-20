@@ -5,6 +5,7 @@ import {
   type Mark,
   type Paragraph,
   type Sinnabschnitt,
+  type Sprachmittel,
   type TatteInfo,
   type TextDocument,
 } from './model/document';
@@ -18,7 +19,7 @@ import { Toast } from './components/Toast';
 import { AnalysisSidebar, type NavTabId } from './components/AnalysisSidebar';
 import { HypothesePanel } from './components/panels/HypothesePanel';
 import { PlaceholderPanel } from './components/panels/PlaceholderPanel';
-import { InhaltAufbauPanel } from './components/panels/InhaltAufbauPanel';
+import { MarkedGroupListPanel } from './components/panels/MarkedGroupListPanel';
 import type { HighlightMode } from './components/MarkableText';
 import { MarkToolRail, type MarkTool } from './components/MarkToolRail';
 import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImages';
@@ -57,6 +58,7 @@ function newDocument(file: File): TextDocument {
     tatte: emptyTatteInfo(),
     hypothese: '',
     sinnabschnitte: [],
+    sprachmittel: [],
   };
 }
 
@@ -76,6 +78,7 @@ function App() {
   const [highlightedWortfeld, setHighlightedWortfeld] = useState<string | 'none' | null>(null);
   const [inhaltDropdownOpen, setInhaltDropdownOpen] = useState(false);
   const [highlightedSinnabschnitt, setHighlightedSinnabschnitt] = useState<string | null>(null);
+  const [highlightedSprachmittel, setHighlightedSprachmittel] = useState<string | null>(null);
   const [toolFilterHover, setToolFilterHover] = useState<MarkTool | null>(null);
   const [toolFilterPinned, setToolFilterPinned] = useState<MarkTool | null>(null);
   const [marksHidden, setMarksHidden] = useState(false);
@@ -243,6 +246,41 @@ function App() {
     updateDoc({ sinnabschnitte: doc.sinnabschnitte.map((s) => (s.id === id ? { ...s, summary } : s)) });
   }
 
+  function handleAssignSprache(groupId: string, sprachmittelId: string) {
+    if (!doc) return;
+    updateDoc({
+      marks: doc.marks.map((m) =>
+        m.groupId === groupId ? { ...m, labels: { ...m.labels, sprache: sprachmittelId } } : m,
+      ),
+    });
+  }
+
+  function handleCreateSprachmittelAndAssign(groupId: string) {
+    if (!doc) return;
+    const newItem: Sprachmittel = {
+      id: crypto.randomUUID(),
+      order: doc.sprachmittel.length,
+      title: '',
+      summary: '',
+    };
+    updateDoc({
+      sprachmittel: [...doc.sprachmittel, newItem],
+      marks: doc.marks.map((m) =>
+        m.groupId === groupId ? { ...m, labels: { ...m.labels, sprache: newItem.id } } : m,
+      ),
+    });
+  }
+
+  function handleRenameSprachmittel(id: string, title: string) {
+    if (!doc) return;
+    updateDoc({ sprachmittel: doc.sprachmittel.map((s) => (s.id === id ? { ...s, title } : s)) });
+  }
+
+  function handleUpdateSprachmittelSummary(id: string, summary: string) {
+    if (!doc) return;
+    updateDoc({ sprachmittel: doc.sprachmittel.map((s) => (s.id === id ? { ...s, summary } : s)) });
+  }
+
   function handleTatteChange(tatte: TatteInfo) {
     updateDoc({ tatte });
   }
@@ -251,6 +289,7 @@ function App() {
     setWortfeldAssignActive(true);
     setHighlightedWortfeld(null);
     setHighlightedSinnabschnitt(null);
+    setHighlightedSprachmittel(null);
     setToolFilterPinned(null);
     setMarksHidden(false);
   }
@@ -263,6 +302,7 @@ function App() {
   function handleHighlightWortfeld(value: string | 'none' | null) {
     setWortfeldAssignActive(false);
     setHighlightedSinnabschnitt(null);
+    setHighlightedSprachmittel(null);
     setToolFilterPinned(null);
     setMarksHidden(false);
     setHighlightedWortfeld(value);
@@ -271,15 +311,26 @@ function App() {
   function handleHighlightSinnabschnitt(id: string | null) {
     setWortfeldAssignActive(false);
     setHighlightedWortfeld(null);
+    setHighlightedSprachmittel(null);
     setToolFilterPinned(null);
     setMarksHidden(false);
     setHighlightedSinnabschnitt(id);
+  }
+
+  function handleHighlightSprachmittel(id: string | null) {
+    setWortfeldAssignActive(false);
+    setHighlightedWortfeld(null);
+    setHighlightedSinnabschnitt(null);
+    setToolFilterPinned(null);
+    setMarksHidden(false);
+    setHighlightedSprachmittel(id);
   }
 
   function handleToggleToolFilterPin(tool: MarkTool) {
     setWortfeldAssignActive(false);
     setHighlightedWortfeld(null);
     setHighlightedSinnabschnitt(null);
+    setHighlightedSprachmittel(null);
     setMarksHidden(false);
     setToolFilterPinned((p) => (p === tool ? null : tool));
   }
@@ -288,6 +339,7 @@ function App() {
     setWortfeldAssignActive(false);
     setHighlightedWortfeld(null);
     setHighlightedSinnabschnitt(null);
+    setHighlightedSprachmittel(null);
     setToolFilterPinned(null);
     setMarksHidden((h) => !h);
   }
@@ -305,9 +357,11 @@ function App() {
         ? { wortfeld: highlightedWortfeld }
         : highlightedSinnabschnitt !== null
           ? { sinnabschnitt: highlightedSinnabschnitt }
-          : marksHidden
-            ? 'hidden'
-            : 'none';
+          : highlightedSprachmittel !== null
+            ? { sprache: highlightedSprachmittel }
+            : marksHidden
+              ? 'hidden'
+              : 'none';
 
   return (
     <div className="app">
@@ -396,6 +450,12 @@ function App() {
           >
             Formale Aspekte
           </button>
+          <button
+            className={`analysis-tab-btn${activeView === 'sprache' ? ' active' : ''}`}
+            onClick={() => setActiveView('sprache')}
+          >
+            Sprache/Stil
+          </button>
         </nav>
       )}
 
@@ -403,7 +463,8 @@ function App() {
         {processing.phase !== 'cropping' &&
           activeView !== 'hypothese' &&
           activeView !== 'inhalt' &&
-          activeView !== 'formal' && (
+          activeView !== 'formal' &&
+          activeView !== 'sprache' && (
             <>
               <p className="subtitle">
                 PDF oder Bild hochladen, Ausschnitte markieren, Text erkennen und bearbeiten.
@@ -455,6 +516,9 @@ function App() {
               highlightedSinnabschnitt={highlightedSinnabschnitt}
               onHighlightSinnabschnitt={handleHighlightSinnabschnitt}
               onRenameSinnabschnitt={handleRenameSinnabschnitt}
+              highlightedSprachmittel={highlightedSprachmittel}
+              onHighlightSprachmittel={handleHighlightSprachmittel}
+              onRenameSprachmittel={handleRenameSprachmittel}
             />
             <div className="grundlage-main">
               <div className="text-with-rail">
@@ -467,6 +531,8 @@ function App() {
                   onSetWortfeldLabel={handleSetWortfeldLabel}
                   onAssignSinnabschnitt={handleAssignSinnabschnitt}
                   onCreateSinnabschnittAndAssign={handleCreateSinnabschnittAndAssign}
+                  onAssignSprache={handleAssignSprache}
+                  onCreateSprachmittelAndAssign={handleCreateSprachmittelAndAssign}
                   onExitAssignMode={handleExitAssignMode}
                 />
                 <MarkToolRail
@@ -486,13 +552,32 @@ function App() {
           <HypothesePanel hypothese={doc.hypothese} onChange={(hypothese) => updateDoc({ hypothese })} />
         )}
         {doc && activeView === 'inhalt' && (
-          <InhaltAufbauPanel
-            sinnabschnitte={doc.sinnabschnitte}
+          <MarkedGroupListPanel
+            heading="Inhalt/Aufbau"
+            items={doc.sinnabschnitte}
+            itemNounSingular="Abschnitt"
+            titleFieldLabel="Überschrift"
+            summaryFieldLabel="Kurze Zusammenfassung"
+            summaryPlaceholder="Worum geht es in diesem Abschnitt?"
+            emptyHint='Noch keine Sinnabschnitte markiert. Markiere im Arbeitsbereich einen Textabschnitt und wähle „Sinnabschnitt“.'
             onRename={handleRenameSinnabschnitt}
             onUpdateSummary={handleUpdateSinnabschnittSummary}
           />
         )}
         {doc && activeView === 'formal' && <PlaceholderPanel title="Formale Aspekte" />}
+        {doc && activeView === 'sprache' && (
+          <MarkedGroupListPanel
+            heading="Sprache/Stil"
+            items={doc.sprachmittel}
+            itemNounSingular="Sprachmittel"
+            titleFieldLabel="Bezeichnung"
+            summaryFieldLabel="Beschreibung/Wirkung"
+            summaryPlaceholder="Was fällt sprachlich auf, und welche Wirkung hat es?"
+            emptyHint='Noch keine Sprachmittel markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Sprache“.'
+            onRename={handleRenameSprachmittel}
+            onUpdateSummary={handleUpdateSprachmittelSummary}
+          />
+        )}
       </main>
 
       <footer id="app-footer">© B. Bruns</footer>

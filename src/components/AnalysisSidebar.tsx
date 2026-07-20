@@ -1,8 +1,14 @@
 import { useState } from 'react';
-import type { Sinnabschnitt, TatteInfo, TextDocument } from '../model/document';
+import type { TatteInfo, TextDocument } from '../model/document';
 import { TattePanel } from './panels/TattePanel';
 
-export type NavTabId = 'hypothese' | 'inhalt' | 'formal';
+export type NavTabId = 'hypothese' | 'inhalt' | 'formal' | 'sprache';
+
+interface NamedGroupItem {
+  id: string;
+  order: number;
+  title: string;
+}
 
 interface AnalysisSidebarProps {
   doc: TextDocument;
@@ -21,6 +27,9 @@ interface AnalysisSidebarProps {
   highlightedSinnabschnitt: string | null;
   onHighlightSinnabschnitt: (id: string | null) => void;
   onRenameSinnabschnitt: (id: string, title: string) => void;
+  highlightedSprachmittel: string | null;
+  onHighlightSprachmittel: (id: string | null) => void;
+  onRenameSprachmittel: (id: string, title: string) => void;
 }
 
 const NAV_ROWS: { id: NavTabId; label: string }[] = [
@@ -28,8 +37,8 @@ const NAV_ROWS: { id: NavTabId; label: string }[] = [
   { id: 'formal', label: 'Formale Aspekte' },
 ];
 
-function sinnabschnittLabel(s: Sinnabschnitt): string {
-  return s.title.trim() || `Abschnitt ${s.order + 1}`;
+function namedGroupLabel(item: NamedGroupItem, fallbackPrefix: string): string {
+  return item.title.trim() || `${fallbackPrefix} ${item.order + 1}`;
 }
 
 export function AnalysisSidebar({
@@ -49,8 +58,11 @@ export function AnalysisSidebar({
   highlightedSinnabschnitt,
   onHighlightSinnabschnitt,
   onRenameSinnabschnitt,
+  highlightedSprachmittel,
+  onHighlightSprachmittel,
+  onRenameSprachmittel,
 }: AnalysisSidebarProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
 
   const wortfeldGroups = Array.from(
@@ -58,15 +70,62 @@ export function AnalysisSidebar({
   ).sort((a, b) => a.localeCompare(b));
   const hasAnyMarks = doc.marks.length > 0;
   const sinnabschnitte = [...doc.sinnabschnitte].sort((a, b) => a.order - b.order);
+  const sprachmittel = [...doc.sprachmittel].sort((a, b) => a.order - b.order);
 
-  function startEditing(s: Sinnabschnitt) {
-    setEditingId(s.id);
-    setEditingValue(s.title);
+  function startEditing(key: string, currentTitle: string) {
+    setEditingKey(key);
+    setEditingValue(currentTitle);
   }
 
-  function commitEditing() {
-    if (editingId) onRenameSinnabschnitt(editingId, editingValue.trim());
-    setEditingId(null);
+  function commitEditing(onRename: (id: string, title: string) => void, id: string) {
+    onRename(id, editingValue.trim());
+    setEditingKey(null);
+  }
+
+  function renderNamedGroupList<T extends NamedGroupItem>(
+    items: T[],
+    keyPrefix: string,
+    fallbackPrefix: string,
+    highlightedId: string | null,
+    onHighlight: (id: string | null) => void,
+    onRename: (id: string, title: string) => void,
+  ) {
+    return items.map((item) => {
+      const editKey = `${keyPrefix}-${item.id}`;
+      if (editingKey === editKey) {
+        return (
+          <input
+            key={item.id}
+            autoFocus
+            className="sidebar-dropdown-rename-input"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={() => commitEditing(onRename, item.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitEditing(onRename, item.id);
+              if (e.key === 'Escape') setEditingKey(null);
+            }}
+          />
+        );
+      }
+      return (
+        <div key={item.id} className="sidebar-dropdown-item-row">
+          <button
+            className={`sidebar-dropdown-item sub${highlightedId === item.id ? ' active' : ''}`}
+            onClick={() => onHighlight(highlightedId === item.id ? null : item.id)}
+          >
+            {namedGroupLabel(item, fallbackPrefix)}
+          </button>
+          <button
+            className="sidebar-dropdown-edit"
+            title="Umbenennen"
+            onClick={() => startEditing(editKey, item.title)}
+          >
+            ✎
+          </button>
+        </div>
+      );
+    });
   }
 
   return (
@@ -124,37 +183,13 @@ export function AnalysisSidebar({
                 <p className="sidebar-dropdown-empty">Noch keine Sinnabschnitte markiert.</p>
               )}
               <div className="sidebar-dropdown-sub">
-                {sinnabschnitte.map((s) =>
-                  editingId === s.id ? (
-                    <input
-                      key={s.id}
-                      autoFocus
-                      className="sidebar-dropdown-rename-input"
-                      value={editingValue}
-                      onChange={(e) => setEditingValue(e.target.value)}
-                      onBlur={commitEditing}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitEditing();
-                        if (e.key === 'Escape') setEditingId(null);
-                      }}
-                    />
-                  ) : (
-                    <div key={s.id} className="sidebar-dropdown-item-row">
-                      <button
-                        className={`sidebar-dropdown-item sub${highlightedSinnabschnitt === s.id ? ' active' : ''}`}
-                        onClick={() => onHighlightSinnabschnitt(highlightedSinnabschnitt === s.id ? null : s.id)}
-                      >
-                        {sinnabschnittLabel(s)}
-                      </button>
-                      <button
-                        className="sidebar-dropdown-edit"
-                        title="Umbenennen"
-                        onClick={() => startEditing(s)}
-                      >
-                        ✎
-                      </button>
-                    </div>
-                  ),
+                {renderNamedGroupList(
+                  sinnabschnitte,
+                  'sinnabschnitt',
+                  'Abschnitt',
+                  highlightedSinnabschnitt,
+                  onHighlightSinnabschnitt,
+                  onRenameSinnabschnitt,
                 )}
               </div>
             </div>
@@ -173,13 +208,16 @@ export function AnalysisSidebar({
       ))}
 
       <div className="sidebar-row-group">
-        <div className="sidebar-row">
-          <button className="sidebar-row-label" disabled>
+        <div className={`sidebar-row${activeView === 'sprache' ? ' active' : ''}`}>
+          <button className="sidebar-row-label" onClick={() => onNavigateToTab('sprache')}>
             Sprache/Stil
           </button>
           <button
             className={`sidebar-row-arrow${sprachDropdownOpen ? ' open' : ''}`}
-            onClick={onToggleSprachDropdown}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSprachDropdown();
+            }}
             title="Werkzeuge"
           >
             ›
@@ -213,6 +251,23 @@ export function AnalysisSidebar({
                   )}
                 </div>
               )}
+            </div>
+
+            <div className="sidebar-dropdown-group">
+              <div className="sidebar-dropdown-header">Sprache</div>
+              {sprachmittel.length === 0 && (
+                <p className="sidebar-dropdown-empty">Noch keine Sprachmittel markiert.</p>
+              )}
+              <div className="sidebar-dropdown-sub">
+                {renderNamedGroupList(
+                  sprachmittel,
+                  'sprache',
+                  'Sprachmittel',
+                  highlightedSprachmittel,
+                  onHighlightSprachmittel,
+                  onRenameSprachmittel,
+                )}
+              </div>
             </div>
           </div>
         )}

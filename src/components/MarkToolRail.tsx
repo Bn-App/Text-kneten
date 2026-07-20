@@ -1,4 +1,6 @@
-export type MarkTool = 'wortfeld' | 'sinnabschnitt';
+import type { MarkTool } from './MarkableText';
+
+export type { MarkTool };
 
 interface MarkToolRailProps {
   pinned: MarkTool | null;
@@ -14,6 +16,7 @@ interface MarkToolRailProps {
 const RAIL_ITEMS: { id: MarkTool; icon: string; label: string }[] = [
   { id: 'wortfeld', icon: '🔤', label: 'Wortfelder' },
   { id: 'sinnabschnitt', icon: '📑', label: 'Sinnabschnitte' },
+  { id: 'sprache', icon: '💬', label: 'Sprache' },
 ];
 
 export function MarkToolRail({ pinned, hidden, onHoverStart, onHoverEnd, onTogglePin, onToggleHidden }: MarkToolRailProps) {

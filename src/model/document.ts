@@ -20,7 +20,7 @@ export interface Page {
   height: number;
 }
 
-export type AnalysisToolId = 'wortfeld' | 'sinnabschnitt';
+export type AnalysisToolId = 'wortfeld' | 'sinnabschnitt' | 'sprache';
 
 export interface Mark {
   id: string;
@@ -52,6 +52,13 @@ export interface Sinnabschnitt {
   summary: string;
 }
 
+export interface Sprachmittel {
+  id: string;
+  order: number;
+  title: string;
+  summary: string;
+}
+
 export interface TextDocument {
   id: string;
   title: string;
@@ -66,6 +73,7 @@ export interface TextDocument {
   tatte: TatteInfo;
   hypothese: string;
   sinnabschnitte: Sinnabschnitt[];
+  sprachmittel: Sprachmittel[];
 }
 
 /** Backfills fields added after a document may have been saved, so old saved/loaded docs don't crash the UI. */
@@ -76,5 +84,6 @@ export function backfillTextDocument(doc: TextDocument): TextDocument {
     tatte: doc.tatte ?? emptyTatteInfo(),
     hypothese: doc.hypothese ?? '',
     sinnabschnitte: doc.sinnabschnitte ?? [],
+    sprachmittel: doc.sprachmittel ?? [],
   };
 }

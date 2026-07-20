@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import type { Line, Mark, Paragraph, Sinnabschnitt } from '../model/document';
+import type { Line, Mark, Paragraph, Sinnabschnitt, Sprachmittel } from '../model/document';
 import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captureSelection';
+
+export type MarkTool = 'wortfeld' | 'sinnabschnitt' | 'sprache';
 
 export type HighlightMode =
   | 'none'
@@ -8,7 +10,8 @@ export type HighlightMode =
   | 'hidden'
   | { wortfeld: string | 'none' }
   | { sinnabschnitt: string }
-  | { tool: 'wortfeld' | 'sinnabschnitt' };
+  | { sprache: string }
+  | { tool: MarkTool };
 export type InteractionMode = 'mark' | 'assign';
 
 interface MarkableTextProps {
@@ -16,6 +19,7 @@ interface MarkableTextProps {
   paragraphs: Paragraph[];
   marks: Mark[];
   sinnabschnitte: Sinnabschnitt[];
+  sprachmittel: Sprachmittel[];
   highlightMode: HighlightMode;
   interactionMode: InteractionMode;
   onCreateMarks: (marks: Mark[]) => void;
@@ -23,6 +27,8 @@ interface MarkableTextProps {
   onSetWortfeldLabel: (groupId: string, value: string) => void;
   onAssignSinnabschnitt: (groupId: string, sinnabschnittId: string) => void;
   onCreateSinnabschnittAndAssign: (groupId: string) => void;
+  onAssignSprache: (groupId: string, sprachmittelId: string) => void;
+  onCreateSprachmittelAndAssign: (groupId: string) => void;
 }
 
 const MARK_COLORS = [
@@ -42,19 +48,19 @@ const MARK_COLORS = [
 
 // List of things you can do with a marking. More entries will be added here
 // as further analysis tools ship.
-const MARK_ACTIONS: { id: 'wortfeld' | 'sinnabschnitt'; label: string }[] = [
+const MARK_ACTIONS: { id: MarkTool; label: string }[] = [
   { id: 'wortfeld', label: 'Wortfeld' },
   { id: 'sinnabschnitt', label: 'Sinnabschnitt' },
+  { id: 'sprache', label: 'Sprache' },
 ];
 
 type CreationPopover =
   | { step: 'color'; rect: DOMRect }
   | { step: 'actions'; rect: DOMRect; groupId: string }
-  | { step: 'wortfeld'; rect: DOMRect; groupId: string }
-  | { step: 'sinnabschnitt'; rect: DOMRect; groupId: string };
+  | { step: MarkTool; rect: DOMRect; groupId: string };
 
-function sinnabschnittLabel(s: Sinnabschnitt): string {
-  return s.title.trim() || `Abschnitt ${s.order + 1}`;
+function namedGroupLabel(item: { title: string; order: number }, fallbackPrefix: string): string {
+  return item.title.trim() || `${fallbackPrefix} ${item.order + 1}`;
 }
 
 /** Whether the current highlight mode is a "show wortfeld marks" view — the
@@ -77,9 +83,12 @@ function isMarkVisible(mark: Mark, highlightMode: HighlightMode): boolean {
   if (highlightMode === 'hidden') return false;
   if (highlightMode === 'none' || highlightMode === 'all') return true;
   if ('tool' in highlightMode) {
-    return highlightMode.tool === 'wortfeld' ? !!mark.labels.wortfeld : !!mark.labels.sinnabschnitt;
+    if (highlightMode.tool === 'wortfeld') return !!mark.labels.wortfeld;
+    if (highlightMode.tool === 'sinnabschnitt') return !!mark.labels.sinnabschnitt;
+    return !!mark.labels.sprache;
   }
   if ('sinnabschnitt' in highlightMode) return mark.labels.sinnabschnitt === highlightMode.sinnabschnitt;
+  if ('sprache' in highlightMode) return mark.labels.sprache === highlightMode.sprache;
   const wf = mark.labels.wortfeld;
   return highlightMode.wortfeld === 'none' ? !wf : wf === highlightMode.wortfeld;
 }
@@ -131,6 +140,7 @@ export function MarkableText({
   paragraphs,
   marks,
   sinnabschnitte,
+  sprachmittel,
   highlightMode,
   interactionMode,
   onCreateMarks,
@@ -138,6 +148,8 @@ export function MarkableText({
   onSetWortfeldLabel,
   onAssignSinnabschnitt,
   onCreateSinnabschnittAndAssign,
+  onAssignSprache,
+  onCreateSprachmittelAndAssign,
 }: MarkableTextProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -246,7 +258,7 @@ export function MarkableText({
     setCreationPopover({ step: 'actions', rect: creationPopover.rect, groupId: newMarks[0].groupId });
   }
 
-  function pickAction(actionId: 'wortfeld' | 'sinnabschnitt') {
+  function pickAction(actionId: MarkTool) {
     if (!creationPopover || creationPopover.step !== 'actions') return;
     setLabelInput('');
     setCreationPopover({ step: actionId, rect: creationPopover.rect, groupId: creationPopover.groupId });
@@ -297,30 +309,36 @@ export function MarkableText({
     );
   }
 
-  function sinnabschnittPickerBody() {
-    const sorted = [...sinnabschnitte].sort((a, b) => a.order - b.order);
+  function namedGroupPickerBody(
+    items: { id: string; order: number; title: string }[],
+    fallbackPrefix: string,
+    newLabel: string,
+    onPickExisting: (id: string) => void,
+    onCreateNew: () => void,
+  ) {
+    const sorted = [...items].sort((a, b) => a.order - b.order);
     return (
       <div className="mt-wortfeld-existing">
-        {sorted.map((s) => (
+        {sorted.map((item) => (
           <button
-            key={s.id}
+            key={item.id}
             className="mt-wortfeld-chip"
             onClick={() => {
-              if (creationPopover?.step === 'sinnabschnitt') onAssignSinnabschnitt(creationPopover.groupId, s.id);
+              onPickExisting(item.id);
               setCreationPopover(null);
             }}
           >
-            {sinnabschnittLabel(s)}
+            {namedGroupLabel(item, fallbackPrefix)}
           </button>
         ))}
         <button
           className="mt-wortfeld-chip new"
           onClick={() => {
-            if (creationPopover?.step === 'sinnabschnitt') onCreateSinnabschnittAndAssign(creationPopover.groupId);
+            onCreateNew();
             setCreationPopover(null);
           }}
         >
-          + Neuer Abschnitt
+          {newLabel}
         </button>
       </div>
     );
@@ -388,7 +406,30 @@ export function MarkableText({
           )}
 
           {creationPopover?.step === 'wortfeld' && wortfeldPickerBody(submitCreationWortfeld)}
-          {creationPopover?.step === 'sinnabschnitt' && sinnabschnittPickerBody()}
+          {creationPopover?.step === 'sinnabschnitt' &&
+            namedGroupPickerBody(
+              sinnabschnitte,
+              'Abschnitt',
+              '+ Neuer Abschnitt',
+              (id) => {
+                if (creationPopover.step === 'sinnabschnitt') onAssignSinnabschnitt(creationPopover.groupId, id);
+              },
+              () => {
+                if (creationPopover.step === 'sinnabschnitt') onCreateSinnabschnittAndAssign(creationPopover.groupId);
+              },
+            )}
+          {creationPopover?.step === 'sprache' &&
+            namedGroupPickerBody(
+              sprachmittel,
+              'Sprachmittel',
+              '+ Neues Sprachmittel',
+              (id) => {
+                if (creationPopover.step === 'sprache') onAssignSprache(creationPopover.groupId, id);
+              },
+              () => {
+                if (creationPopover.step === 'sprache') onCreateSprachmittelAndAssign(creationPopover.groupId);
+              },
+            )}
 
           {markPopover && interactionMode === 'mark' && (
             <button
