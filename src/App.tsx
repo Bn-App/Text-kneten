@@ -15,6 +15,7 @@ import { OcrProgress } from './components/OcrProgress';
 import { EditableTextPanel, ReadOnlyTextPanel } from './components/EditableTextPanel';
 import { CollabModal } from './components/CollabModal';
 import { OriginalPageModal } from './components/OriginalPageModal';
+import { NewDocumentConfirmModal } from './components/NewDocumentConfirmModal';
 import { CropSelector } from './components/CropSelector';
 import { Toast } from './components/Toast';
 import { AnalysisSidebar, type NavTabId } from './components/AnalysisSidebar';
@@ -101,6 +102,7 @@ function App() {
   const [theme, toggleTheme] = useTheme();
   const [collabModalOpen, setCollabModalOpen] = useState(() => location.hash.startsWith('#room='));
   const [originalPageModalOpen, setOriginalPageModalOpen] = useState(false);
+  const [newDocConfirmOpen, setNewDocConfirmOpen] = useState(false);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const [toastMessage, showToast] = useToast();
   const [activeView, setActiveView] = useState<MainView>('edit');
@@ -141,15 +143,23 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleNewDocument() {
-    if (doc && !confirm('Neues Dokument beginnen? Der bisherige Fortschritt bleibt zwar lokal gespeichert, wird danach aber nicht mehr automatisch geöffnet.')) {
-      return;
-    }
+  function requestNewDocument() {
+    if (!doc) return;
+    setNewDocConfirmOpen(true);
+  }
+
+  function resetToNewDocument() {
     sessionStorage.removeItem(SESSION_DOC_KEY);
     setDoc(null);
     setEditableText('');
     setActiveView('edit');
     setProcessing({ phase: 'idle' });
+    setNewDocConfirmOpen(false);
+  }
+
+  function handleNewDocumentSaveAndProceed() {
+    if (doc) downloadDocument(doc);
+    resetToNewDocument();
   }
 
   const handleRemoteDocument = useCallback((remoteDoc: TextDocument) => {
@@ -244,7 +254,10 @@ function App() {
 
   function handleConfirmBase() {
     if (!doc) return;
-    save(doc);
+    // Regenerate lines/paragraphs from the current textarea content, so the locked
+    // Arbeitsbereich reflects reflowed prose even if the user never touched the text.
+    const { lines, paragraphs } = editableTextToLines(editableText);
+    updateDoc({ lines, paragraphs });
     showToast('Arbeitsbereich gespeichert');
     setActiveView('text');
   }
@@ -373,16 +386,16 @@ function App() {
       <header id="toolbar">
         <h1>Text kneten</h1>
 
+        {doc && (
+          <button className="btn" onClick={requestNewDocument} title="Eigenes neues Dokument beginnen">
+            🆕 Neu
+          </button>
+        )}
+
+        <div className="sep" />
+
         <button className="btn" onClick={handleSaveClick} disabled={!doc} title="Fortschritt als Datei speichern">
           💾 Speichern
-        </button>
-        <button
-          className="btn"
-          onClick={handlePdfExportClick}
-          disabled={!doc}
-          title="Analyse als PDF exportieren (für die Bewertung)"
-        >
-          📥 PDF Export
         </button>
         <label className="btn" title="Gespeicherten Fortschritt laden">
           📂 Laden
@@ -416,12 +429,6 @@ function App() {
           </div>
         )}
 
-        {doc && (
-          <button className="btn" onClick={handleNewDocument} title="Eigenes neues Dokument beginnen">
-            🆕 Neu
-          </button>
-        )}
-
         <div className="sep" />
 
         <button className="btn primary" onClick={handleCollabClick} title="Gemeinsam arbeiten">
@@ -435,6 +442,15 @@ function App() {
             </span>
           </div>
         )}
+
+        <button
+          className="btn"
+          onClick={handlePdfExportClick}
+          disabled={!doc}
+          title="Analyse als PDF exportieren (für die Bewertung)"
+        >
+          📥 PDF Export
+        </button>
 
         <div className="sep" />
 
@@ -478,7 +494,7 @@ function App() {
         </nav>
       )}
 
-      <main className={activeView === 'text' && doc ? 'wide' : ''}>
+      <main className={(activeView === 'text' || activeView === 'edit') && doc ? 'wide' : ''}>
         {!doc && processing.phase !== 'cropping' && (
           <>
             <p className="subtitle">PDF oder Bild hochladen, Ausschnitte markieren, Text erkennen und bearbeiten.</p>
@@ -688,6 +704,13 @@ function App() {
         pages={doc?.pages ?? []}
         open={originalPageModalOpen}
         onClose={() => setOriginalPageModalOpen(false)}
+      />
+
+      <NewDocumentConfirmModal
+        open={newDocConfirmOpen}
+        onCancel={() => setNewDocConfirmOpen(false)}
+        onSaveAndProceed={handleNewDocumentSaveAndProceed}
+        onProceedWithoutSaving={resetToNewDocument}
       />
     </div>
   );

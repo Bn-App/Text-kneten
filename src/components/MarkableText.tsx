@@ -320,6 +320,11 @@ export function MarkableText({
   }
 
   const popoverRect = creationPopover?.rect ?? markPopover?.rect ?? null;
+  // Clamp the popover so it can't render off-screen on narrow tablet/phone viewports.
+  const POPOVER_WIDTH_ESTIMATE = 230;
+  const popoverLeft = popoverRect
+    ? Math.max(8, Math.min(popoverRect.left, window.innerWidth - POPOVER_WIDTH_ESTIMATE - 8))
+    : 0;
 
   return (
     <div
@@ -351,7 +356,7 @@ export function MarkableText({
         <div
           ref={popoverRef}
           className="mt-popover"
-          style={{ position: 'fixed', top: popoverRect.bottom + 6, left: popoverRect.left }}
+          style={{ position: 'fixed', top: popoverRect.bottom + 6, left: popoverLeft }}
         >
           {creationPopover?.step === 'color' && (
             <div className="mt-color-step">

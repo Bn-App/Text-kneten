@@ -27,6 +27,10 @@ interface MarkedGroupListPanelProps {
 
 const COLLAPSE_THRESHOLD = 3;
 
+function itemDisplayTitle(item: MarkedGroupItem, itemNounSingular: string): string {
+  return item.title.trim() || `${itemNounSingular} ${item.order + 1}`;
+}
+
 export function MarkedGroupListPanel({
   heading,
   items,
@@ -42,10 +46,20 @@ export function MarkedGroupListPanel({
   onUpdateSummary,
 }: MarkedGroupListPanelProps) {
   const sorted = [...items].sort((a, b) => a.order - b.order);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedExcerptIds, setExpandedExcerptIds] = useState<Set<string>>(new Set());
+  const [collapsedItemIds, setCollapsedItemIds] = useState<Set<string>>(new Set());
 
-  function toggleExpanded(id: string) {
-    setExpandedIds((prev) => {
+  function toggleExcerptsExpanded(id: string) {
+    setExpandedExcerptIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleItemCollapsed(id: string) {
+    setCollapsedItemIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -61,51 +75,68 @@ export function MarkedGroupListPanel({
       ) : (
         <div className="sinnabschnitt-list">
           {sorted.map((item) => {
+            const isCollapsed = collapsedItemIds.has(item.id);
             const excerpts = excerptsForItem(item.id, tool, marks, lines);
-            const isExpanded = expandedIds.has(item.id);
-            const visibleExcerpts = isExpanded ? excerpts : excerpts.slice(0, COLLAPSE_THRESHOLD);
+            const isExcerptsExpanded = expandedExcerptIds.has(item.id);
+            const visibleExcerpts = isExcerptsExpanded ? excerpts : excerpts.slice(0, COLLAPSE_THRESHOLD);
+
             return (
               <div key={item.id} className="sinnabschnitt-item">
-                <label className="panel-field">
-                  <span className="panel-field-label">
-                    {titleFieldLabel} {itemNounSingular} {item.order + 1}
+                <button
+                  className="sinnabschnitt-item-header"
+                  onClick={() => toggleItemCollapsed(item.id)}
+                  title={isCollapsed ? 'Ausklappen' : 'Einklappen'}
+                >
+                  <span className={`sinnabschnitt-item-arrow${isCollapsed ? '' : ' open'}`}>›</span>
+                  <span className="sinnabschnitt-item-title">
+                    {item.order + 1}. {itemDisplayTitle(item, itemNounSingular)}
                   </span>
-                  <input
-                    type="text"
-                    value={item.title}
-                    placeholder={`${itemNounSingular} ${item.order + 1}`}
-                    onChange={(e) => onRename(item.id, e.target.value)}
-                  />
-                </label>
+                </button>
 
-                {excerpts.length > 0 && (
-                  <div className="panel-field">
-                    <span className="panel-field-label">Markierte Textstellen</span>
-                    <div className="marked-excerpts">
-                      {visibleExcerpts.map((text, i) => (
-                        <div key={i} className="marked-excerpt-line">
-                          „{text}“
+                {!isCollapsed && (
+                  <>
+                    <label className="panel-field">
+                      <span className="panel-field-label">
+                        {titleFieldLabel} {itemNounSingular} {item.order + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={item.title}
+                        placeholder={`${itemNounSingular} ${item.order + 1}`}
+                        onChange={(e) => onRename(item.id, e.target.value)}
+                      />
+                    </label>
+
+                    {excerpts.length > 0 && (
+                      <div className="panel-field">
+                        <span className="panel-field-label">Markierte Textstellen</span>
+                        <div className="marked-excerpts">
+                          {visibleExcerpts.map((text, i) => (
+                            <div key={i} className="marked-excerpt-line">
+                              „{text}“
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                    {excerpts.length > COLLAPSE_THRESHOLD && (
-                      <button className="marked-excerpts-toggle" onClick={() => toggleExpanded(item.id)}>
-                        {isExpanded ? '▴ Weniger anzeigen' : `▾ Alle ${excerpts.length} anzeigen`}
-                      </button>
+                        {excerpts.length > COLLAPSE_THRESHOLD && (
+                          <button className="marked-excerpts-toggle" onClick={() => toggleExcerptsExpanded(item.id)}>
+                            {isExcerptsExpanded ? '▴ Weniger anzeigen' : `▾ Alle ${excerpts.length} anzeigen`}
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
 
-                <label className="panel-field">
-                  <span className="panel-field-label">{summaryFieldLabel}</span>
-                  <textarea
-                    className="panel-textarea"
-                    rows={3}
-                    value={item.summary}
-                    placeholder={summaryPlaceholder}
-                    onChange={(e) => onUpdateSummary(item.id, e.target.value)}
-                  />
-                </label>
+                    <label className="panel-field">
+                      <span className="panel-field-label">{summaryFieldLabel}</span>
+                      <textarea
+                        className="panel-textarea"
+                        rows={3}
+                        value={item.summary}
+                        placeholder={summaryPlaceholder}
+                        onChange={(e) => onUpdateSummary(item.id, e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
               </div>
             );
           })}
