@@ -1,23 +1,8 @@
-export interface LyrikTableRow {
-  begriff: string;
-  erklaerung: string;
-}
-
-export interface LyrikTable {
-  columns: [string, string];
-  rows: LyrikTableRow[];
-}
-
-export interface LyrikSection {
-  id: string;
-  heading: string;
-  intro?: string;
-  table?: LyrikTable;
-}
+import type { ReferenceSection } from '../reference/types';
 
 // Eigenständig formulierte Kurzübersicht zu Grundbegriffen der Gedichtanalyse
 // (keine Übernahme aus einem bestimmten Lehrbuch).
-export const LYRIK_SECTIONS: LyrikSection[] = [
+export const LYRIK_SECTIONS: ReferenceSection[] = [
   {
     id: 'sprecherinstanz',
     heading: 'Die Sprecherinstanz in Gedichten',

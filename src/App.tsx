@@ -21,7 +21,9 @@ import { HypothesePanel } from './components/panels/HypothesePanel';
 import { PlaceholderPanel } from './components/panels/PlaceholderPanel';
 import { MarkedGroupListPanel } from './components/panels/MarkedGroupListPanel';
 import { SprachlicheMittelInfo } from './components/SprachlicheMittelInfo';
-import { LyrikInfo } from './components/LyrikInfo';
+import { ReferenceDropdown } from './components/ReferenceDropdown';
+import { LYRIK_SECTIONS } from './lib/sprache/lyrikData';
+import { EPIK_SECTIONS } from './lib/sprache/epikData';
 import type { HighlightMode } from './components/MarkableText';
 import { MarkToolRail, type MarkTool } from './components/MarkToolRail';
 import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImages';
@@ -568,7 +570,8 @@ function App() {
         )}
         {doc && activeView === 'formal' && (
           <>
-            <LyrikInfo />
+            <ReferenceDropdown icon="📚" label="Lyrik" sections={LYRIK_SECTIONS} />
+            <ReferenceDropdown icon="📖" label="Epik" sections={EPIK_SECTIONS} />
             <PlaceholderPanel title="Formale Aspekte" />
           </>
         )}

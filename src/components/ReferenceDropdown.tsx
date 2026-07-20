@@ -1,18 +1,24 @@
 import { useState } from 'react';
-import { LYRIK_SECTIONS } from '../lib/sprache/lyrikData';
+import type { ReferenceSection } from '../lib/reference/types';
 
-export function LyrikInfo() {
+interface ReferenceDropdownProps {
+  icon: string;
+  label: string;
+  sections: ReferenceSection[];
+}
+
+export function ReferenceDropdown({ icon, label, sections }: ReferenceDropdownProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="sm-info">
       <button className="btn" onClick={() => setOpen((o) => !o)}>
-        📚 Lyrik {open ? '▴' : '▾'}
+        {icon} {label} {open ? '▴' : '▾'}
       </button>
 
       {open && (
         <div className="sm-info-panel">
-          {LYRIK_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <div key={section.id} className="lyrik-section">
               <h4>{section.heading}</h4>
               {section.intro && <p>{section.intro}</p>}
