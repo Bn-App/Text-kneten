@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   emptyTatteInfo,
   type Line,
@@ -24,7 +24,7 @@ import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImage
 import { loadImageFile } from './lib/pdf/loadImageFile';
 import { recognizeImage } from './lib/ocr/runOcr';
 import { pageToLines, linesToEditableText, editableTextToLines } from './lib/ocr/reconstructText';
-import { save } from './lib/storage/documentStore';
+import { save, list } from './lib/storage/documentStore';
 import { useTheme } from './lib/theme/useTheme';
 import { useCollab } from './lib/collab/useCollab';
 import { downloadDocument, parseDocumentFile } from './lib/persistence/fileIO';
@@ -75,6 +75,18 @@ function App() {
   const [highlightedWortfeld, setHighlightedWortfeld] = useState<string | 'none' | null>(null);
   const [inhaltDropdownOpen, setInhaltDropdownOpen] = useState(false);
   const [highlightedSinnabschnitt, setHighlightedSinnabschnitt] = useState<string | null>(null);
+
+  // Restore the most recently worked-on document from localStorage on load,
+  // so a browser reload doesn't appear to wipe out unsaved progress.
+  useEffect(() => {
+    const docs = list();
+    if (docs.length === 0) return;
+    const restored = docs[0];
+    setDoc(restored);
+    setEditableText(linesToEditableText(restored.lines));
+    setActiveView('text');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRemoteDocument = useCallback((remoteDoc: TextDocument) => {
     setDoc(remoteDoc);
@@ -329,6 +341,12 @@ function App() {
 
       {doc && (
         <nav className="analysis-tab-nav">
+          <button
+            className={`analysis-tab-btn${activeView === 'text' ? ' active' : ''}`}
+            onClick={() => setActiveView('text')}
+          >
+            Arbeitsbereich
+          </button>
           <button
             className={`analysis-tab-btn${activeView === 'hypothese' ? ' active' : ''}`}
             onClick={() => setActiveView('hypothese')}
