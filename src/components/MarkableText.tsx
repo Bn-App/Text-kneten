@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Line, Mark, Paragraph, Sinnabschnitt } from '../model/document';
 import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captureSelection';
 
@@ -54,6 +54,22 @@ type CreationPopover =
 
 function sinnabschnittLabel(s: Sinnabschnitt): string {
   return s.title.trim() || `Abschnitt ${s.order + 1}`;
+}
+
+/** Whether the current highlight mode is a "show wortfeld marks" view — the
+ * only situation in which we draw connector lines between same-field marks. */
+function isWortfeldView(highlightMode: HighlightMode): boolean {
+  if (highlightMode === 'none' || highlightMode === 'all') return false;
+  if ('tool' in highlightMode) return highlightMode.tool === 'wortfeld';
+  return 'wortfeld' in highlightMode && highlightMode.wortfeld !== 'none';
+}
+
+interface ConnectionLine {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 }
 
 function isMarkVisible(mark: Mark, highlightMode: HighlightMode): boolean {
@@ -122,11 +138,57 @@ export function MarkableText({
   onCreateSinnabschnittAndAssign,
 }: MarkableTextProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const pendingSegmentsRef = useRef<ReturnType<typeof captureSelectionAsSegments>>([]);
   const [creationPopover, setCreationPopover] = useState<CreationPopover | null>(null);
   const [markPopover, setMarkPopover] = useState<{ mark: Mark; rect: DOMRect } | null>(null);
   const [labelInput, setLabelInput] = useState('');
+  const [connectionLines, setConnectionLines] = useState<ConnectionLine[]>([]);
+
+  const showWortfeldConnections = isWortfeldView(highlightMode);
+
+  useLayoutEffect(() => {
+    if (!showWortfeldConnections || !textRef.current) {
+      setConnectionLines([]);
+      return;
+    }
+    const container = textRef.current;
+
+    function recompute() {
+      const containerRect = container.getBoundingClientRect();
+      const centersByField = new Map<string, { x: number; y: number }[]>();
+
+      container.querySelectorAll<HTMLElement>('mark[data-mark-id]').forEach((el) => {
+        const mark = marks.find((m) => m.id === el.dataset.markId);
+        const field = mark?.labels.wortfeld;
+        if (!field) return;
+        const r = el.getBoundingClientRect();
+        const point = { x: r.left + r.width / 2 - containerRect.left, y: r.top + r.height / 2 - containerRect.top };
+        const arr = centersByField.get(field) ?? [];
+        arr.push(point);
+        centersByField.set(field, arr);
+      });
+
+      const lines: ConnectionLine[] = [];
+      centersByField.forEach((points, field) => {
+        for (let i = 0; i < points.length - 1; i++) {
+          lines.push({
+            id: `${field}-${i}`,
+            x1: points[i].x,
+            y1: points[i].y,
+            x2: points[i + 1].x,
+            y2: points[i + 1].y,
+          });
+        }
+      });
+      setConnectionLines(lines);
+    }
+
+    recompute();
+    window.addEventListener('resize', recompute);
+    return () => window.removeEventListener('resize', recompute);
+  }, [showWortfeldConnections, marks, lines, highlightMode]);
 
   const anyPopoverOpen = creationPopover !== null || markPopover !== null;
   useEffect(() => {
@@ -270,15 +332,25 @@ export function MarkableText({
       className={`markable-text${highlightMode === 'all' ? ' mt-dimmed' : ''}`}
       onMouseUp={handleMouseUp}
     >
-      {paragraphOrder.map((paragraphId) => (
-        <div key={paragraphId} className="mt-paragraph">
-          {(linesByParagraph.get(paragraphId) ?? []).map((line) => (
-            <div key={line.id} data-line-id={line.id} className="mt-line">
-              {renderLineContent(line.text, marksByLine.get(line.id) ?? [], highlightMode, handleMarkClick)}
-            </div>
-          ))}
-        </div>
-      ))}
+      <div ref={textRef} className="mt-text-body">
+        {paragraphOrder.map((paragraphId) => (
+          <div key={paragraphId} className="mt-paragraph">
+            {(linesByParagraph.get(paragraphId) ?? []).map((line) => (
+              <div key={line.id} data-line-id={line.id} className="mt-line">
+                {renderLineContent(line.text, marksByLine.get(line.id) ?? [], highlightMode, handleMarkClick)}
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {connectionLines.length > 0 && (
+          <svg className="mt-connections" aria-hidden="true">
+            {connectionLines.map((l) => (
+              <line key={l.id} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} />
+            ))}
+          </svg>
+        )}
+      </div>
 
       {popoverRect && (creationPopover || markPopover) && (
         <div
