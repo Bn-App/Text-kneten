@@ -3,9 +3,8 @@ import {
   emptyTatteInfo,
   type Line,
   type Mark,
+  type NamedMarkGroup,
   type Paragraph,
-  type Sinnabschnitt,
-  type Sprachmittel,
   type TatteInfo,
   type TextDocument,
 } from './model/document';
@@ -18,7 +17,6 @@ import { CropSelector } from './components/CropSelector';
 import { Toast } from './components/Toast';
 import { AnalysisSidebar, type NavTabId } from './components/AnalysisSidebar';
 import { HypothesePanel } from './components/panels/HypothesePanel';
-import { PlaceholderPanel } from './components/panels/PlaceholderPanel';
 import { MarkedGroupListPanel } from './components/panels/MarkedGroupListPanel';
 import { SprachlicheMittelInfo } from './components/SprachlicheMittelInfo';
 import { ReferenceDropdown } from './components/ReferenceDropdown';
@@ -63,8 +61,24 @@ function newDocument(file: File): TextDocument {
     hypothese: '',
     sinnabschnitte: [],
     sprachmittel: [],
+    wortfelder: [],
+    lyrischesIch: [],
+    figuren: [],
+    formaleAspekte: [],
   };
 }
+
+const GROUP_ARRAY_KEY: Record<
+  MarkTool,
+  'wortfelder' | 'sinnabschnitte' | 'sprachmittel' | 'lyrischesIch' | 'figuren' | 'formaleAspekte'
+> = {
+  wortfeld: 'wortfelder',
+  sinnabschnitt: 'sinnabschnitte',
+  sprache: 'sprachmittel',
+  'lyrisches-ich': 'lyrischesIch',
+  figur: 'figuren',
+  'formale-aspekte': 'formaleAspekte',
+};
 
 function App() {
   const [doc, setDoc] = useState<TextDocument | null>(null);
@@ -78,11 +92,11 @@ function App() {
 
   const [tatteExpanded, setTatteExpanded] = useState(false);
   const [sprachDropdownOpen, setSprachDropdownOpen] = useState(false);
-  const [wortfeldAssignActive, setWortfeldAssignActive] = useState(false);
-  const [highlightedWortfeld, setHighlightedWortfeld] = useState<string | 'none' | null>(null);
   const [inhaltDropdownOpen, setInhaltDropdownOpen] = useState(false);
-  const [highlightedSinnabschnitt, setHighlightedSinnabschnitt] = useState<string | null>(null);
-  const [highlightedSprachmittel, setHighlightedSprachmittel] = useState<string | null>(null);
+  const [formalDropdownOpen, setFormalDropdownOpen] = useState(false);
+  const [assignTool, setAssignTool] = useState<MarkTool | null>(null);
+  const [highlightedGroup, setHighlightedGroup] = useState<{ tool: MarkTool; id: string } | null>(null);
+  const [highlightedUnassigned, setHighlightedUnassigned] = useState<MarkTool | null>(null);
   const [toolFilterHover, setToolFilterHover] = useState<MarkTool | null>(null);
   const [toolFilterPinned, setToolFilterPinned] = useState<MarkTool | null>(null);
   const [marksHidden, setMarksHidden] = useState(false);
@@ -205,167 +219,99 @@ function App() {
     updateDoc({ marks: doc.marks.filter((m) => m.groupId !== groupId) });
   }
 
-  function handleSetWortfeldLabel(groupId: string, value: string) {
+  function handleAssignGroup(tool: MarkTool, groupId: string, entityId: string) {
     if (!doc) return;
-    const trimmed = value.trim();
     updateDoc({
-      marks: doc.marks.map((m) =>
-        m.groupId === groupId ? { ...m, labels: { ...m.labels, wortfeld: trimmed || undefined } } : m,
-      ),
+      marks: doc.marks.map((m) => (m.groupId === groupId ? { ...m, labels: { ...m.labels, [tool]: entityId } } : m)),
     });
   }
 
-  function handleAssignSinnabschnitt(groupId: string, sinnabschnittId: string) {
+  function handleCreateGroupAndAssign(tool: MarkTool, groupId: string) {
     if (!doc) return;
+    const key = GROUP_ARRAY_KEY[tool];
+    const items = doc[key];
+    const newItem: NamedMarkGroup = { id: crypto.randomUUID(), order: items.length, title: '', summary: '' };
     updateDoc({
-      marks: doc.marks.map((m) =>
-        m.groupId === groupId ? { ...m, labels: { ...m.labels, sinnabschnitt: sinnabschnittId } } : m,
-      ),
-    });
+      [key]: [...items, newItem],
+      marks: doc.marks.map((m) => (m.groupId === groupId ? { ...m, labels: { ...m.labels, [tool]: newItem.id } } : m)),
+    } as Partial<TextDocument>);
   }
 
-  function handleCreateSinnabschnittAndAssign(groupId: string) {
+  function handleRenameGroup(tool: MarkTool, id: string, title: string) {
     if (!doc) return;
-    const newSection: Sinnabschnitt = {
-      id: crypto.randomUUID(),
-      order: doc.sinnabschnitte.length,
-      title: '',
-      summary: '',
-    };
-    updateDoc({
-      sinnabschnitte: [...doc.sinnabschnitte, newSection],
-      marks: doc.marks.map((m) =>
-        m.groupId === groupId ? { ...m, labels: { ...m.labels, sinnabschnitt: newSection.id } } : m,
-      ),
-    });
+    const key = GROUP_ARRAY_KEY[tool];
+    const items = doc[key];
+    updateDoc({ [key]: items.map((it) => (it.id === id ? { ...it, title } : it)) } as Partial<TextDocument>);
   }
 
-  function handleRenameSinnabschnitt(id: string, title: string) {
+  function handleUpdateGroupSummary(tool: MarkTool, id: string, summary: string) {
     if (!doc) return;
-    updateDoc({ sinnabschnitte: doc.sinnabschnitte.map((s) => (s.id === id ? { ...s, title } : s)) });
-  }
-
-  function handleUpdateSinnabschnittSummary(id: string, summary: string) {
-    if (!doc) return;
-    updateDoc({ sinnabschnitte: doc.sinnabschnitte.map((s) => (s.id === id ? { ...s, summary } : s)) });
-  }
-
-  function handleAssignSprache(groupId: string, sprachmittelId: string) {
-    if (!doc) return;
-    updateDoc({
-      marks: doc.marks.map((m) =>
-        m.groupId === groupId ? { ...m, labels: { ...m.labels, sprache: sprachmittelId } } : m,
-      ),
-    });
-  }
-
-  function handleCreateSprachmittelAndAssign(groupId: string) {
-    if (!doc) return;
-    const newItem: Sprachmittel = {
-      id: crypto.randomUUID(),
-      order: doc.sprachmittel.length,
-      title: '',
-      summary: '',
-    };
-    updateDoc({
-      sprachmittel: [...doc.sprachmittel, newItem],
-      marks: doc.marks.map((m) =>
-        m.groupId === groupId ? { ...m, labels: { ...m.labels, sprache: newItem.id } } : m,
-      ),
-    });
-  }
-
-  function handleRenameSprachmittel(id: string, title: string) {
-    if (!doc) return;
-    updateDoc({ sprachmittel: doc.sprachmittel.map((s) => (s.id === id ? { ...s, title } : s)) });
-  }
-
-  function handleUpdateSprachmittelSummary(id: string, summary: string) {
-    if (!doc) return;
-    updateDoc({ sprachmittel: doc.sprachmittel.map((s) => (s.id === id ? { ...s, summary } : s)) });
+    const key = GROUP_ARRAY_KEY[tool];
+    const items = doc[key];
+    updateDoc({ [key]: items.map((it) => (it.id === id ? { ...it, summary } : it)) } as Partial<TextDocument>);
   }
 
   function handleTatteChange(tatte: TatteInfo) {
     updateDoc({ tatte });
   }
 
-  function handleStartWortfeldAssign() {
-    setWortfeldAssignActive(true);
-    setHighlightedWortfeld(null);
-    setHighlightedSinnabschnitt(null);
-    setHighlightedSprachmittel(null);
+  function resetHighlightState() {
+    setAssignTool(null);
+    setHighlightedGroup(null);
+    setHighlightedUnassigned(null);
     setToolFilterPinned(null);
     setMarksHidden(false);
+  }
+
+  function handleStartAssign(tool: MarkTool) {
+    resetHighlightState();
+    setAssignTool(tool);
   }
 
   function handleExitAssignMode() {
-    setWortfeldAssignActive(false);
-    setHighlightedWortfeld(null);
+    setAssignTool(null);
   }
 
-  function handleHighlightWortfeld(value: string | 'none' | null) {
-    setWortfeldAssignActive(false);
-    setHighlightedSinnabschnitt(null);
-    setHighlightedSprachmittel(null);
-    setToolFilterPinned(null);
-    setMarksHidden(false);
-    setHighlightedWortfeld(value);
+  function handleHighlightGroup(tool: MarkTool, id: string) {
+    const next = highlightedGroup?.tool === tool && highlightedGroup.id === id ? null : { tool, id };
+    resetHighlightState();
+    setHighlightedGroup(next);
   }
 
-  function handleHighlightSinnabschnitt(id: string | null) {
-    setWortfeldAssignActive(false);
-    setHighlightedWortfeld(null);
-    setHighlightedSprachmittel(null);
-    setToolFilterPinned(null);
-    setMarksHidden(false);
-    setHighlightedSinnabschnitt(id);
-  }
-
-  function handleHighlightSprachmittel(id: string | null) {
-    setWortfeldAssignActive(false);
-    setHighlightedWortfeld(null);
-    setHighlightedSinnabschnitt(null);
-    setToolFilterPinned(null);
-    setMarksHidden(false);
-    setHighlightedSprachmittel(id);
+  function handleHighlightUnassigned(tool: MarkTool) {
+    const next = highlightedUnassigned === tool ? null : tool;
+    resetHighlightState();
+    setHighlightedUnassigned(next);
   }
 
   function handleToggleToolFilterPin(tool: MarkTool) {
-    setWortfeldAssignActive(false);
-    setHighlightedWortfeld(null);
-    setHighlightedSinnabschnitt(null);
-    setHighlightedSprachmittel(null);
-    setMarksHidden(false);
-    setToolFilterPinned((p) => (p === tool ? null : tool));
+    const next = toolFilterPinned === tool ? null : tool;
+    resetHighlightState();
+    setToolFilterPinned(next);
   }
 
   function handleToggleMarksHidden() {
-    setWortfeldAssignActive(false);
-    setHighlightedWortfeld(null);
-    setHighlightedSinnabschnitt(null);
-    setHighlightedSprachmittel(null);
-    setToolFilterPinned(null);
-    setMarksHidden((h) => !h);
+    const next = !marksHidden;
+    resetHighlightState();
+    setMarksHidden(next);
   }
 
   const isBusy = processing.phase === 'rendering-pdf' || processing.phase === 'ocr';
   const collabActive = collab.status === 'waiting' || collab.status === 'connected';
 
-  const interactionMode = wortfeldAssignActive ? 'assign' : 'mark';
+  const interactionMode = assignTool ? 'assign' : 'mark';
   const activeToolFilter = toolFilterHover ?? toolFilterPinned;
-  const highlightMode: HighlightMode = wortfeldAssignActive
+  const highlightMode: HighlightMode = assignTool
     ? 'all'
     : activeToolFilter
       ? { tool: activeToolFilter }
-      : highlightedWortfeld !== null
-        ? { wortfeld: highlightedWortfeld }
-        : highlightedSinnabschnitt !== null
-          ? { sinnabschnitt: highlightedSinnabschnitt }
-          : highlightedSprachmittel !== null
-            ? { sprache: highlightedSprachmittel }
-            : marksHidden
-              ? 'hidden'
-              : 'none';
+      : highlightedGroup
+        ? { group: highlightedGroup }
+        : highlightedUnassigned
+          ? { unassigned: highlightedUnassigned }
+          : marksHidden
+            ? 'hidden'
+            : 'none';
 
   return (
     <div className="app">
@@ -512,17 +458,16 @@ function App() {
               onTatteChange={handleTatteChange}
               sprachDropdownOpen={sprachDropdownOpen}
               onToggleSprachDropdown={() => setSprachDropdownOpen((v) => !v)}
-              onStartWortfeldAssign={handleStartWortfeldAssign}
-              highlightedWortfeld={highlightedWortfeld}
-              onHighlightWortfeld={handleHighlightWortfeld}
               inhaltDropdownOpen={inhaltDropdownOpen}
               onToggleInhaltDropdown={() => setInhaltDropdownOpen((v) => !v)}
-              highlightedSinnabschnitt={highlightedSinnabschnitt}
-              onHighlightSinnabschnitt={handleHighlightSinnabschnitt}
-              onRenameSinnabschnitt={handleRenameSinnabschnitt}
-              highlightedSprachmittel={highlightedSprachmittel}
-              onHighlightSprachmittel={handleHighlightSprachmittel}
-              onRenameSprachmittel={handleRenameSprachmittel}
+              formalDropdownOpen={formalDropdownOpen}
+              onToggleFormalDropdown={() => setFormalDropdownOpen((v) => !v)}
+              highlightedGroup={highlightedGroup}
+              highlightedUnassigned={highlightedUnassigned}
+              onHighlightGroup={handleHighlightGroup}
+              onHighlightUnassigned={handleHighlightUnassigned}
+              onRenameGroup={handleRenameGroup}
+              onStartAssign={handleStartAssign}
             />
             <div className="grundlage-main">
               <div className="text-with-rail">
@@ -530,13 +475,11 @@ function App() {
                   doc={doc}
                   highlightMode={highlightMode}
                   interactionMode={interactionMode}
+                  assignTool={assignTool}
                   onCreateMarks={handleCreateMarks}
                   onDeleteMarkGroup={handleDeleteMarkGroup}
-                  onSetWortfeldLabel={handleSetWortfeldLabel}
-                  onAssignSinnabschnitt={handleAssignSinnabschnitt}
-                  onCreateSinnabschnittAndAssign={handleCreateSinnabschnittAndAssign}
-                  onAssignSprache={handleAssignSprache}
-                  onCreateSprachmittelAndAssign={handleCreateSprachmittelAndAssign}
+                  onAssignGroup={handleAssignGroup}
+                  onCreateGroupAndAssign={handleCreateGroupAndAssign}
                   onExitAssignMode={handleExitAssignMode}
                 />
                 <MarkToolRail
@@ -556,28 +499,88 @@ function App() {
           <HypothesePanel hypothese={doc.hypothese} onChange={(hypothese) => updateDoc({ hypothese })} />
         )}
         {doc && activeView === 'inhalt' && (
-          <MarkedGroupListPanel
-            heading="Inhalt/Aufbau"
-            items={doc.sinnabschnitte}
-            itemNounSingular="Abschnitt"
-            titleFieldLabel="Überschrift"
-            summaryFieldLabel="Kurze Zusammenfassung"
-            summaryPlaceholder="Worum geht es in diesem Abschnitt?"
-            emptyHint='Noch keine Beobachtungen Inhalt/Aufbau markiert. Markiere im Arbeitsbereich einen Textabschnitt und wähle „Beobachtungen Inhalt/Aufbau“.'
-            onRename={handleRenameSinnabschnitt}
-            onUpdateSummary={handleUpdateSinnabschnittSummary}
-          />
+          <>
+            <MarkedGroupListPanel
+              heading="Inhalt/Aufbau"
+              items={doc.sinnabschnitte}
+              itemNounSingular="Abschnitt"
+              titleFieldLabel="Überschrift"
+              summaryFieldLabel="Kurze Zusammenfassung"
+              summaryPlaceholder="Worum geht es in diesem Abschnitt?"
+              emptyHint='Noch keine Beobachtungen Inhalt/Aufbau markiert. Markiere im Arbeitsbereich einen Textabschnitt und wähle „Beobachtungen Inhalt/Aufbau“.'
+              tool="sinnabschnitt"
+              marks={doc.marks}
+              lines={doc.lines}
+              onRename={(id, title) => handleRenameGroup('sinnabschnitt', id, title)}
+              onUpdateSummary={(id, summary) => handleUpdateGroupSummary('sinnabschnitt', id, summary)}
+            />
+            <MarkedGroupListPanel
+              heading="Lyrisches Ich"
+              items={doc.lyrischesIch}
+              itemNounSingular="Beobachtung"
+              titleFieldLabel="Bezeichnung"
+              summaryFieldLabel="Beschreibung"
+              summaryPlaceholder="Was fällt beim lyrischen Ich an dieser Stelle auf?"
+              emptyHint='Noch keine Beobachtungen zum lyrischen Ich markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Lyrisches Ich“.'
+              tool="lyrisches-ich"
+              marks={doc.marks}
+              lines={doc.lines}
+              onRename={(id, title) => handleRenameGroup('lyrisches-ich', id, title)}
+              onUpdateSummary={(id, summary) => handleUpdateGroupSummary('lyrisches-ich', id, summary)}
+            />
+            <MarkedGroupListPanel
+              heading="Figuren"
+              items={doc.figuren}
+              itemNounSingular="Figur"
+              titleFieldLabel="Name"
+              summaryFieldLabel="Beschreibung/Charakterisierung"
+              summaryPlaceholder="Was zeichnet diese Figur an dieser Stelle aus?"
+              emptyHint='Noch keine Figuren markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Figuren“.'
+              tool="figur"
+              marks={doc.marks}
+              lines={doc.lines}
+              onRename={(id, title) => handleRenameGroup('figur', id, title)}
+              onUpdateSummary={(id, summary) => handleUpdateGroupSummary('figur', id, summary)}
+            />
+          </>
         )}
         {doc && activeView === 'formal' && (
           <>
             <ReferenceDropdown icon="📚" label="Lyrik" sections={LYRIK_SECTIONS} />
             <ReferenceDropdown icon="📖" label="Epik" sections={EPIK_SECTIONS} />
-            <PlaceholderPanel title="Formale Aspekte" />
+            <MarkedGroupListPanel
+              heading="Formale Aspekte"
+              items={doc.formaleAspekte}
+              itemNounSingular="Beobachtung"
+              titleFieldLabel="Bezeichnung"
+              summaryFieldLabel="Beschreibung"
+              summaryPlaceholder="Was fällt hier formal auf, und welche Wirkung hat es?"
+              emptyHint='Noch keine formalen Aspekte markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Formale Aspekte“.'
+              tool="formale-aspekte"
+              marks={doc.marks}
+              lines={doc.lines}
+              onRename={(id, title) => handleRenameGroup('formale-aspekte', id, title)}
+              onUpdateSummary={(id, summary) => handleUpdateGroupSummary('formale-aspekte', id, summary)}
+            />
           </>
         )}
         {doc && activeView === 'sprache' && (
           <>
             <SprachlicheMittelInfo />
+            <MarkedGroupListPanel
+              heading="Wortfelder"
+              items={doc.wortfelder}
+              itemNounSingular="Wortfeld"
+              titleFieldLabel="Bezeichnung"
+              summaryFieldLabel="Beschreibung"
+              summaryPlaceholder="Welche Wörter gehören zu diesem Wortfeld, und welche Wirkung hat es?"
+              emptyHint='Noch keine Wortfelder markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Wortfeld“.'
+              tool="wortfeld"
+              marks={doc.marks}
+              lines={doc.lines}
+              onRename={(id, title) => handleRenameGroup('wortfeld', id, title)}
+              onUpdateSummary={(id, summary) => handleUpdateGroupSummary('wortfeld', id, summary)}
+            />
             <MarkedGroupListPanel
               heading="Sprache/Stil"
               items={doc.sprachmittel}
@@ -586,8 +589,11 @@ function App() {
               summaryFieldLabel="Beschreibung/Wirkung"
               summaryPlaceholder="Was fällt sprachlich auf, und welche Wirkung hat es?"
               emptyHint='Noch keine sprachlichen Auffälligkeiten markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Sprache“.'
-              onRename={handleRenameSprachmittel}
-              onUpdateSummary={handleUpdateSprachmittelSummary}
+              tool="sprache"
+              marks={doc.marks}
+              lines={doc.lines}
+              onRename={(id, title) => handleRenameGroup('sprache', id, title)}
+              onUpdateSummary={(id, summary) => handleUpdateGroupSummary('sprache', id, summary)}
             />
           </>
         )}

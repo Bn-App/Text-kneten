@@ -1,4 +1,4 @@
-import type { Mark } from '../../model/document';
+import type { Mark, MarkStyle } from '../../model/document';
 
 export interface CapturedSegment {
   lineId: string;
@@ -76,7 +76,7 @@ export function captureSelectionAsSegments(root: HTMLElement): CapturedSegment[]
   return segments;
 }
 
-export function segmentsToMarks(segments: CapturedSegment[], color: string): Mark[] {
+export function segmentsToMarks(segments: CapturedSegment[], color: string, style: MarkStyle = 'highlight'): Mark[] {
   const groupId = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   return segments.map((seg) => ({
@@ -86,6 +86,7 @@ export function segmentsToMarks(segments: CapturedSegment[], color: string): Mar
     startOffset: seg.startOffset,
     endOffset: seg.endOffset,
     color,
+    style,
     labels: {},
     createdAt,
   }));

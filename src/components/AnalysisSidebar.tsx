@@ -1,14 +1,9 @@
 import { useState } from 'react';
-import type { TatteInfo, TextDocument } from '../model/document';
+import type { NamedMarkGroup, TatteInfo, TextDocument } from '../model/document';
+import type { MarkTool } from './MarkableText';
 import { TattePanel } from './panels/TattePanel';
 
 export type NavTabId = 'hypothese' | 'inhalt' | 'formal' | 'sprache';
-
-interface NamedGroupItem {
-  id: string;
-  order: number;
-  title: string;
-}
 
 interface AnalysisSidebarProps {
   doc: TextDocument;
@@ -19,25 +14,19 @@ interface AnalysisSidebarProps {
   onTatteChange: (tatte: TatteInfo) => void;
   sprachDropdownOpen: boolean;
   onToggleSprachDropdown: () => void;
-  onStartWortfeldAssign: () => void;
-  highlightedWortfeld: string | 'none' | null;
-  onHighlightWortfeld: (value: string | 'none' | null) => void;
   inhaltDropdownOpen: boolean;
   onToggleInhaltDropdown: () => void;
-  highlightedSinnabschnitt: string | null;
-  onHighlightSinnabschnitt: (id: string | null) => void;
-  onRenameSinnabschnitt: (id: string, title: string) => void;
-  highlightedSprachmittel: string | null;
-  onHighlightSprachmittel: (id: string | null) => void;
-  onRenameSprachmittel: (id: string, title: string) => void;
+  formalDropdownOpen: boolean;
+  onToggleFormalDropdown: () => void;
+  highlightedGroup: { tool: MarkTool; id: string } | null;
+  highlightedUnassigned: MarkTool | null;
+  onHighlightGroup: (tool: MarkTool, id: string) => void;
+  onHighlightUnassigned: (tool: MarkTool) => void;
+  onRenameGroup: (tool: MarkTool, id: string, title: string) => void;
+  onStartAssign: (tool: MarkTool) => void;
 }
 
-const NAV_ROWS: { id: NavTabId; label: string }[] = [
-  { id: 'hypothese', label: 'Hypothese' },
-  { id: 'formal', label: 'Formale Aspekte' },
-];
-
-function namedGroupLabel(item: NamedGroupItem, fallbackPrefix: string): string {
+function namedGroupLabel(item: NamedMarkGroup, fallbackPrefix: string): string {
   return item.title.trim() || `${fallbackPrefix} ${item.order + 1}`;
 }
 
@@ -50,48 +39,35 @@ export function AnalysisSidebar({
   onTatteChange,
   sprachDropdownOpen,
   onToggleSprachDropdown,
-  onStartWortfeldAssign,
-  highlightedWortfeld,
-  onHighlightWortfeld,
   inhaltDropdownOpen,
   onToggleInhaltDropdown,
-  highlightedSinnabschnitt,
-  onHighlightSinnabschnitt,
-  onRenameSinnabschnitt,
-  highlightedSprachmittel,
-  onHighlightSprachmittel,
-  onRenameSprachmittel,
+  formalDropdownOpen,
+  onToggleFormalDropdown,
+  highlightedGroup,
+  highlightedUnassigned,
+  onHighlightGroup,
+  onHighlightUnassigned,
+  onRenameGroup,
+  onStartAssign,
 }: AnalysisSidebarProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
 
-  const wortfeldGroups = Array.from(
-    new Set(doc.marks.map((m) => m.labels.wortfeld).filter((v): v is string => !!v)),
-  ).sort((a, b) => a.localeCompare(b));
   const hasAnyMarks = doc.marks.length > 0;
-  const sinnabschnitte = [...doc.sinnabschnitte].sort((a, b) => a.order - b.order);
-  const sprachmittel = [...doc.sprachmittel].sort((a, b) => a.order - b.order);
 
   function startEditing(key: string, currentTitle: string) {
     setEditingKey(key);
     setEditingValue(currentTitle);
   }
 
-  function commitEditing(onRename: (id: string, title: string) => void, id: string) {
-    onRename(id, editingValue.trim());
+  function commitEditing(tool: MarkTool, id: string) {
+    onRenameGroup(tool, id, editingValue.trim());
     setEditingKey(null);
   }
 
-  function renderNamedGroupList<T extends NamedGroupItem>(
-    items: T[],
-    keyPrefix: string,
-    fallbackPrefix: string,
-    highlightedId: string | null,
-    onHighlight: (id: string | null) => void,
-    onRename: (id: string, title: string) => void,
-  ) {
+  function renderNamedGroupList(tool: MarkTool, items: NamedMarkGroup[], fallbackPrefix: string) {
     return items.map((item) => {
-      const editKey = `${keyPrefix}-${item.id}`;
+      const editKey = `${tool}-${item.id}`;
       if (editingKey === editKey) {
         return (
           <input
@@ -100,19 +76,20 @@ export function AnalysisSidebar({
             className="sidebar-dropdown-rename-input"
             value={editingValue}
             onChange={(e) => setEditingValue(e.target.value)}
-            onBlur={() => commitEditing(onRename, item.id)}
+            onBlur={() => commitEditing(tool, item.id)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') commitEditing(onRename, item.id);
+              if (e.key === 'Enter') commitEditing(tool, item.id);
               if (e.key === 'Escape') setEditingKey(null);
             }}
           />
         );
       }
+      const isActive = highlightedGroup?.tool === tool && highlightedGroup.id === item.id;
       return (
         <div key={item.id} className="sidebar-dropdown-item-row">
           <button
-            className={`sidebar-dropdown-item sub${highlightedId === item.id ? ' active' : ''}`}
-            onClick={() => onHighlight(highlightedId === item.id ? null : item.id)}
+            className={`sidebar-dropdown-item sub${isActive ? ' active' : ''}`}
+            onClick={() => onHighlightGroup(tool, item.id)}
           >
             {namedGroupLabel(item, fallbackPrefix)}
           </button>
@@ -126,6 +103,44 @@ export function AnalysisSidebar({
         </div>
       );
     });
+  }
+
+  function renderToolSection(
+    tool: MarkTool,
+    header: string,
+    items: NamedMarkGroup[],
+    fallbackPrefix: string,
+    emptyHint: string,
+    options?: { assignTriggerLabel?: string; showUnassigned?: boolean },
+  ) {
+    const sorted = [...items].sort((a, b) => a.order - b.order);
+    return (
+      <div className="sidebar-dropdown-group" key={tool}>
+        {options?.assignTriggerLabel ? (
+          <button className="sidebar-dropdown-item" onClick={() => onStartAssign(tool)}>
+            {options.assignTriggerLabel}
+          </button>
+        ) : (
+          <div className="sidebar-dropdown-header">{header}</div>
+        )}
+        {sorted.length === 0 && !options?.assignTriggerLabel && (
+          <p className="sidebar-dropdown-empty">{emptyHint}</p>
+        )}
+        {(sorted.length > 0 || (options?.showUnassigned && hasAnyMarks)) && (
+          <div className="sidebar-dropdown-sub">
+            {renderNamedGroupList(tool, sorted, fallbackPrefix)}
+            {options?.showUnassigned && hasAnyMarks && (
+              <button
+                className={`sidebar-dropdown-item sub${highlightedUnassigned === tool ? ' active' : ''}`}
+                onClick={() => onHighlightUnassigned(tool)}
+              >
+                keine Zuordnung
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -177,35 +192,60 @@ export function AnalysisSidebar({
 
         {inhaltDropdownOpen && (
           <div className="sidebar-dropdown">
-            <div className="sidebar-dropdown-group">
-              <div className="sidebar-dropdown-header">Beobachtungen Inhalt/Aufbau</div>
-              {sinnabschnitte.length === 0 && (
-                <p className="sidebar-dropdown-empty">Noch keine Beobachtungen Inhalt/Aufbau markiert.</p>
-              )}
-              <div className="sidebar-dropdown-sub">
-                {renderNamedGroupList(
-                  sinnabschnitte,
-                  'sinnabschnitt',
-                  'Abschnitt',
-                  highlightedSinnabschnitt,
-                  onHighlightSinnabschnitt,
-                  onRenameSinnabschnitt,
-                )}
-              </div>
-            </div>
+            {renderToolSection(
+              'sinnabschnitt',
+              'Beobachtungen Inhalt/Aufbau',
+              doc.sinnabschnitte,
+              'Abschnitt',
+              'Noch keine Beobachtungen Inhalt/Aufbau markiert.',
+            )}
+            {renderToolSection(
+              'lyrisches-ich',
+              'Lyrisches Ich',
+              doc.lyrischesIch,
+              'Beobachtung',
+              'Noch keine Beobachtungen zum lyrischen Ich markiert.',
+            )}
+            {renderToolSection(
+              'figur',
+              'Figuren',
+              doc.figuren,
+              'Figur',
+              'Noch keine Figuren markiert.',
+            )}
           </div>
         )}
       </div>
 
-      {NAV_ROWS.map((row) => (
-        <div key={row.id} className="sidebar-row-group">
-          <div className={`sidebar-row${activeView === row.id ? ' active' : ''}`}>
-            <button className="sidebar-row-label" onClick={() => onNavigateToTab(row.id)}>
-              {row.label}
-            </button>
-          </div>
+      <div className="sidebar-row-group">
+        <div className={`sidebar-row${activeView === 'formal' ? ' active' : ''}`}>
+          <button className="sidebar-row-label" onClick={() => onNavigateToTab('formal')}>
+            Formale Aspekte
+          </button>
+          <button
+            className={`sidebar-row-arrow${formalDropdownOpen ? ' open' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFormalDropdown();
+            }}
+            title="Formale Aspekte"
+          >
+            ›
+          </button>
         </div>
-      ))}
+
+        {formalDropdownOpen && (
+          <div className="sidebar-dropdown">
+            {renderToolSection(
+              'formale-aspekte',
+              'Formale Aspekte',
+              doc.formaleAspekte,
+              'Beobachtung',
+              'Noch keine formalen Aspekte markiert.',
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="sidebar-row-group">
         <div className={`sidebar-row${activeView === 'sprache' ? ' active' : ''}`}>
@@ -226,49 +266,17 @@ export function AnalysisSidebar({
 
         {sprachDropdownOpen && (
           <div className="sidebar-dropdown">
-            <div className="sidebar-dropdown-group">
-              <button className="sidebar-dropdown-item" onClick={onStartWortfeldAssign}>
-                Wortfelder
-              </button>
-              {wortfeldGroups.length > 0 && (
-                <div className="sidebar-dropdown-sub">
-                  {wortfeldGroups.map((name) => (
-                    <button
-                      key={name}
-                      className={`sidebar-dropdown-item sub${highlightedWortfeld === name ? ' active' : ''}`}
-                      onClick={() => onHighlightWortfeld(highlightedWortfeld === name ? null : name)}
-                    >
-                      {name}
-                    </button>
-                  ))}
-                  {hasAnyMarks && (
-                    <button
-                      className={`sidebar-dropdown-item sub${highlightedWortfeld === 'none' ? ' active' : ''}`}
-                      onClick={() => onHighlightWortfeld(highlightedWortfeld === 'none' ? null : 'none')}
-                    >
-                      keine Zuordnung
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="sidebar-dropdown-group">
-              <div className="sidebar-dropdown-header">Sprache</div>
-              {sprachmittel.length === 0 && (
-                <p className="sidebar-dropdown-empty">Noch keine sprachlichen Auffälligkeiten markiert.</p>
-              )}
-              <div className="sidebar-dropdown-sub">
-                {renderNamedGroupList(
-                  sprachmittel,
-                  'sprache',
-                  'sprachliche Auffälligkeit',
-                  highlightedSprachmittel,
-                  onHighlightSprachmittel,
-                  onRenameSprachmittel,
-                )}
-              </div>
-            </div>
+            {renderToolSection('wortfeld', 'Wortfelder', doc.wortfelder, 'Wortfeld', '', {
+              assignTriggerLabel: 'Wortfelder',
+              showUnassigned: true,
+            })}
+            {renderToolSection(
+              'sprache',
+              'Sprache',
+              doc.sprachmittel,
+              'sprachliche Auffälligkeit',
+              'Noch keine sprachlichen Auffälligkeiten markiert.',
+            )}
           </div>
         )}
       </div>

@@ -1,34 +1,30 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import type { Line, Mark, Paragraph, Sinnabschnitt, Sprachmittel } from '../model/document';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { Line, Mark, MarkStyle, NamedMarkGroup, Paragraph } from '../model/document';
 import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captureSelection';
 
-export type MarkTool = 'wortfeld' | 'sinnabschnitt' | 'sprache';
+export type MarkTool = 'wortfeld' | 'sinnabschnitt' | 'sprache' | 'lyrisches-ich' | 'figur' | 'formale-aspekte';
 
 export type HighlightMode =
   | 'none'
   | 'all'
   | 'hidden'
-  | { wortfeld: string | 'none' }
-  | { sinnabschnitt: string }
-  | { sprache: string }
-  | { tool: MarkTool };
+  | { tool: MarkTool }
+  | { group: { tool: MarkTool; id: string } }
+  | { unassigned: MarkTool };
 export type InteractionMode = 'mark' | 'assign';
 
 interface MarkableTextProps {
   lines: Line[];
   paragraphs: Paragraph[];
   marks: Mark[];
-  sinnabschnitte: Sinnabschnitt[];
-  sprachmittel: Sprachmittel[];
+  groups: Record<MarkTool, NamedMarkGroup[]>;
   highlightMode: HighlightMode;
   interactionMode: InteractionMode;
+  assignTool: MarkTool | null;
   onCreateMarks: (marks: Mark[]) => void;
   onDeleteMarkGroup: (groupId: string) => void;
-  onSetWortfeldLabel: (groupId: string, value: string) => void;
-  onAssignSinnabschnitt: (groupId: string, sinnabschnittId: string) => void;
-  onCreateSinnabschnittAndAssign: (groupId: string) => void;
-  onAssignSprache: (groupId: string, sprachmittelId: string) => void;
-  onCreateSprachmittelAndAssign: (groupId: string) => void;
+  onAssignGroup: (tool: MarkTool, groupId: string, entityId: string) => void;
+  onCreateGroupAndAssign: (tool: MarkTool, groupId: string) => void;
 }
 
 const MARK_COLORS = [
@@ -44,15 +40,46 @@ const MARK_COLORS = [
   '#c7d2fe',
   '#ddd6fe',
   '#fbcfe8',
+  '#f87171',
+  '#fb923c',
+  '#facc15',
+  '#4ade80',
+  '#2dd4bf',
+  '#38bdf8',
+  '#818cf8',
+  '#e879f9',
+  '#f472b6',
+  '#a3a3a3',
+  '#78716c',
+  '#57534e',
 ];
 
-// List of things you can do with a marking. More entries will be added here
-// as further analysis tools ship.
-const MARK_ACTIONS: { id: MarkTool; label: string }[] = [
-  { id: 'wortfeld', label: 'Wortfeld' },
-  { id: 'sinnabschnitt', label: 'Beobachtungen Inhalt/Aufbau' },
-  { id: 'sprache', label: 'Sprache' },
-];
+// Every analysis tool that produces named, assignable marks. Extend here as
+// further marking-based tools ship.
+const TOOL_META: Record<MarkTool, { actionLabel: string; fallbackPrefix: string; newLabel: string }> = {
+  wortfeld: { actionLabel: 'Wortfeld', fallbackPrefix: 'Wortfeld', newLabel: '+ Neues Wortfeld' },
+  sinnabschnitt: {
+    actionLabel: 'Beobachtungen Inhalt/Aufbau',
+    fallbackPrefix: 'Abschnitt',
+    newLabel: '+ Neuer Abschnitt',
+  },
+  sprache: {
+    actionLabel: 'Sprache',
+    fallbackPrefix: 'sprachliche Auffälligkeit',
+    newLabel: '+ Neue sprachliche Auffälligkeit',
+  },
+  'lyrisches-ich': { actionLabel: 'Lyrisches Ich', fallbackPrefix: 'Beobachtung', newLabel: '+ Neue Beobachtung' },
+  figur: { actionLabel: 'Figuren', fallbackPrefix: 'Figur', newLabel: '+ Neue Figur' },
+  'formale-aspekte': {
+    actionLabel: 'Formale Aspekte',
+    fallbackPrefix: 'Beobachtung',
+    newLabel: '+ Neue Beobachtung',
+  },
+};
+
+const MARK_ACTIONS: { id: MarkTool; label: string }[] = (
+  Object.keys(TOOL_META) as MarkTool[]
+).map((id) => ({ id, label: TOOL_META[id].actionLabel }));
 
 type CreationPopover =
   | { step: 'color'; rect: DOMRect }
@@ -63,12 +90,11 @@ function namedGroupLabel(item: { title: string; order: number }, fallbackPrefix:
   return item.title.trim() || `${fallbackPrefix} ${item.order + 1}`;
 }
 
-/** Whether the current highlight mode is a "show wortfeld marks" view — the
+/** Whether the current highlight mode is a "show all wortfeld marks" view — the
  * only situation in which we draw connector lines between same-field marks. */
-function isWortfeldView(highlightMode: HighlightMode): boolean {
+function isWortfeldToolView(highlightMode: HighlightMode): boolean {
   if (typeof highlightMode === 'string') return false;
-  if ('tool' in highlightMode) return highlightMode.tool === 'wortfeld';
-  return 'wortfeld' in highlightMode && highlightMode.wortfeld !== 'none';
+  return 'tool' in highlightMode && highlightMode.tool === 'wortfeld';
 }
 
 interface ConnectionLine {
@@ -82,15 +108,9 @@ interface ConnectionLine {
 function isMarkVisible(mark: Mark, highlightMode: HighlightMode): boolean {
   if (highlightMode === 'hidden') return false;
   if (highlightMode === 'none' || highlightMode === 'all') return true;
-  if ('tool' in highlightMode) {
-    if (highlightMode.tool === 'wortfeld') return !!mark.labels.wortfeld;
-    if (highlightMode.tool === 'sinnabschnitt') return !!mark.labels.sinnabschnitt;
-    return !!mark.labels.sprache;
-  }
-  if ('sinnabschnitt' in highlightMode) return mark.labels.sinnabschnitt === highlightMode.sinnabschnitt;
-  if ('sprache' in highlightMode) return mark.labels.sprache === highlightMode.sprache;
-  const wf = mark.labels.wortfeld;
-  return highlightMode.wortfeld === 'none' ? !wf : wf === highlightMode.wortfeld;
+  if ('tool' in highlightMode) return !!mark.labels[highlightMode.tool];
+  if ('unassigned' in highlightMode) return !mark.labels[highlightMode.unassigned];
+  return mark.labels[highlightMode.group.tool] === highlightMode.group.id;
 }
 
 function renderLineContent(
@@ -111,12 +131,22 @@ function renderLineContent(
     const segText = text.slice(start, end);
     if (segText) {
       if (isMarkVisible(mark, highlightMode)) {
+        const markStyle: CSSProperties =
+          mark.style === 'underline'
+            ? {
+                backgroundColor: 'transparent',
+                textDecorationLine: 'underline',
+                textDecorationColor: mark.color,
+                textDecorationThickness: '3px',
+                textUnderlineOffset: '3px',
+              }
+            : { backgroundColor: mark.color };
         parts.push(
           <mark
             key={mark.id}
             data-mark-id={mark.id}
-            className="mt-mark"
-            style={{ backgroundColor: mark.color }}
+            className={`mt-mark${mark.style === 'underline' ? ' mt-mark-underline' : ''}`}
+            style={markStyle}
             onClick={(e) => {
               e.stopPropagation();
               onMarkClick(mark, (e.target as HTMLElement).getBoundingClientRect());
@@ -139,17 +169,14 @@ export function MarkableText({
   lines,
   paragraphs,
   marks,
-  sinnabschnitte,
-  sprachmittel,
+  groups,
   highlightMode,
   interactionMode,
+  assignTool,
   onCreateMarks,
   onDeleteMarkGroup,
-  onSetWortfeldLabel,
-  onAssignSinnabschnitt,
-  onCreateSinnabschnittAndAssign,
-  onAssignSprache,
-  onCreateSprachmittelAndAssign,
+  onAssignGroup,
+  onCreateGroupAndAssign,
 }: MarkableTextProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -157,10 +184,9 @@ export function MarkableText({
   const pendingSegmentsRef = useRef<ReturnType<typeof captureSelectionAsSegments>>([]);
   const [creationPopover, setCreationPopover] = useState<CreationPopover | null>(null);
   const [markPopover, setMarkPopover] = useState<{ mark: Mark; rect: DOMRect } | null>(null);
-  const [labelInput, setLabelInput] = useState('');
   const [connectionLines, setConnectionLines] = useState<ConnectionLine[]>([]);
 
-  const showWortfeldConnections = isWortfeldView(highlightMode);
+  const showWortfeldConnections = isWortfeldToolView(highlightMode);
 
   useLayoutEffect(() => {
     if (!showWortfeldConnections || !textRef.current) {
@@ -217,10 +243,6 @@ export function MarkableText({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [anyPopoverOpen]);
 
-  const existingWortfelder = Array.from(
-    new Set(marks.map((m) => m.labels.wortfeld).filter((v): v is string => !!v)),
-  ).sort((a, b) => a.localeCompare(b));
-
   const paragraphOrder = [...paragraphs].sort((a, b) => a.order - b.order).map((p) => p.id);
   const linesByParagraph = new Map<string, Line[]>();
   for (const line of [...lines].sort((a, b) => a.order - b.order)) {
@@ -246,13 +268,13 @@ export function MarkableText({
     setCreationPopover({ step: 'color', rect });
   }
 
-  function pickColor(color: string) {
+  function pickColor(color: string, style: MarkStyle) {
     const segments = pendingSegmentsRef.current;
     if (segments.length === 0 || !creationPopover) {
       setCreationPopover(null);
       return;
     }
-    const newMarks = segmentsToMarks(segments, color);
+    const newMarks = segmentsToMarks(segments, color, style);
     onCreateMarks(newMarks);
     window.getSelection()?.removeAllRanges();
     setCreationPopover({ step: 'actions', rect: creationPopover.rect, groupId: newMarks[0].groupId });
@@ -260,63 +282,16 @@ export function MarkableText({
 
   function pickAction(actionId: MarkTool) {
     if (!creationPopover || creationPopover.step !== 'actions') return;
-    setLabelInput('');
     setCreationPopover({ step: actionId, rect: creationPopover.rect, groupId: creationPopover.groupId });
-  }
-
-  function submitCreationWortfeld(value: string) {
-    if (creationPopover?.step === 'wortfeld') onSetWortfeldLabel(creationPopover.groupId, value.trim());
-    setCreationPopover(null);
   }
 
   function handleMarkClick(mark: Mark, rect: DOMRect) {
     setMarkPopover({ mark, rect });
-    setLabelInput(mark.labels.wortfeld ?? '');
   }
 
-  function submitMarkLabel(value: string) {
-    if (markPopover) onSetWortfeldLabel(markPopover.mark.groupId, value.trim());
-    setMarkPopover(null);
-  }
-
-  function wortfeldPickerBody(onSubmit: (value: string) => void) {
-    return (
-      <>
-        {existingWortfelder.length > 0 && (
-          <div className="mt-wortfeld-existing">
-            {existingWortfelder.map((name) => (
-              <button key={name} className="mt-wortfeld-chip" onClick={() => onSubmit(name)}>
-                {name}
-              </button>
-            ))}
-          </div>
-        )}
-        <input
-          autoFocus
-          className="mt-label-input"
-          value={labelInput}
-          placeholder="Neues Wortfeld…"
-          onChange={(e) => setLabelInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSubmit(labelInput);
-            if (e.key === 'Escape') {
-              setCreationPopover(null);
-              setMarkPopover(null);
-            }
-          }}
-        />
-      </>
-    );
-  }
-
-  function namedGroupPickerBody(
-    items: { id: string; order: number; title: string }[],
-    fallbackPrefix: string,
-    newLabel: string,
-    onPickExisting: (id: string) => void,
-    onCreateNew: () => void,
-  ) {
-    const sorted = [...items].sort((a, b) => a.order - b.order);
+  function namedGroupPickerBody(tool: MarkTool, groupId: string, onPicked: () => void) {
+    const meta = TOOL_META[tool];
+    const sorted = [...groups[tool]].sort((a, b) => a.order - b.order);
     return (
       <div className="mt-wortfeld-existing">
         {sorted.map((item) => (
@@ -324,21 +299,21 @@ export function MarkableText({
             key={item.id}
             className="mt-wortfeld-chip"
             onClick={() => {
-              onPickExisting(item.id);
-              setCreationPopover(null);
+              onAssignGroup(tool, groupId, item.id);
+              onPicked();
             }}
           >
-            {namedGroupLabel(item, fallbackPrefix)}
+            {namedGroupLabel(item, meta.fallbackPrefix)}
           </button>
         ))}
         <button
           className="mt-wortfeld-chip new"
           onClick={() => {
-            onCreateNew();
-            setCreationPopover(null);
+            onCreateGroupAndAssign(tool, groupId);
+            onPicked();
           }}
         >
-          {newLabel}
+          {meta.newLabel}
         </button>
       </div>
     );
@@ -379,16 +354,32 @@ export function MarkableText({
           style={{ position: 'fixed', top: popoverRect.bottom + 6, left: popoverRect.left }}
         >
           {creationPopover?.step === 'color' && (
-            <div className="mt-color-swatches">
-              {MARK_COLORS.map((c) => (
-                <button
-                  key={c}
-                  className="mt-color-swatch"
-                  style={{ backgroundColor: c }}
-                  onClick={() => pickColor(c)}
-                  title={c}
-                />
-              ))}
+            <div className="mt-color-step">
+              <div className="mt-color-step-label">Markieren</div>
+              <div className="mt-color-swatches">
+                {MARK_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className="mt-color-swatch"
+                    style={{ backgroundColor: c }}
+                    onClick={() => pickColor(c, 'highlight')}
+                    title={c}
+                  />
+                ))}
+              </div>
+              <div className="mt-color-step-label">Unterstreichen</div>
+              <div className="mt-color-swatches">
+                {MARK_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className="mt-color-underline-swatch"
+                    onClick={() => pickColor(c, 'underline')}
+                    title={c}
+                  >
+                    <span className="mt-color-underline-line" style={{ backgroundColor: c }} />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -405,31 +396,10 @@ export function MarkableText({
             </div>
           )}
 
-          {creationPopover?.step === 'wortfeld' && wortfeldPickerBody(submitCreationWortfeld)}
-          {creationPopover?.step === 'sinnabschnitt' &&
-            namedGroupPickerBody(
-              sinnabschnitte,
-              'Abschnitt',
-              '+ Neuer Abschnitt',
-              (id) => {
-                if (creationPopover.step === 'sinnabschnitt') onAssignSinnabschnitt(creationPopover.groupId, id);
-              },
-              () => {
-                if (creationPopover.step === 'sinnabschnitt') onCreateSinnabschnittAndAssign(creationPopover.groupId);
-              },
-            )}
-          {creationPopover?.step === 'sprache' &&
-            namedGroupPickerBody(
-              sprachmittel,
-              'sprachliche Auffälligkeit',
-              '+ Neue sprachliche Auffälligkeit',
-              (id) => {
-                if (creationPopover.step === 'sprache') onAssignSprache(creationPopover.groupId, id);
-              },
-              () => {
-                if (creationPopover.step === 'sprache') onCreateSprachmittelAndAssign(creationPopover.groupId);
-              },
-            )}
+          {creationPopover &&
+            creationPopover.step !== 'color' &&
+            creationPopover.step !== 'actions' &&
+            namedGroupPickerBody(creationPopover.step, creationPopover.groupId, () => setCreationPopover(null))}
 
           {markPopover && interactionMode === 'mark' && (
             <button
@@ -443,7 +413,10 @@ export function MarkableText({
             </button>
           )}
 
-          {markPopover && interactionMode === 'assign' && wortfeldPickerBody(submitMarkLabel)}
+          {markPopover &&
+            interactionMode === 'assign' &&
+            assignTool &&
+            namedGroupPickerBody(assignTool, markPopover.mark.groupId, () => setMarkPopover(null))}
         </div>
       )}
     </div>

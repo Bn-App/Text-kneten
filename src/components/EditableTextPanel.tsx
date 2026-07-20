@@ -1,5 +1,5 @@
-import type { Line, Mark, TextDocument } from '../model/document';
-import { MarkableText, type HighlightMode, type InteractionMode } from './MarkableText';
+import type { Line, Mark, NamedMarkGroup, TextDocument } from '../model/document';
+import { MarkableText, type HighlightMode, type InteractionMode, type MarkTool } from './MarkableText';
 
 interface EditableTextPanelProps {
   text: string;
@@ -37,17 +37,24 @@ export function EditableTextPanel({ text, lines, onChange, onConfirm }: Editable
   );
 }
 
+const ASSIGN_HINT: Record<MarkTool, string> = {
+  wortfeld: 'Klicke eine markierte Stelle, um ihr ein Wortfeld zuzuweisen.',
+  sinnabschnitt: 'Klicke eine markierte Stelle, um sie einer Beobachtung Inhalt/Aufbau zuzuweisen.',
+  sprache: 'Klicke eine markierte Stelle, um ihr eine sprachliche Auffälligkeit zuzuweisen.',
+  'lyrisches-ich': 'Klicke eine markierte Stelle, um sie dem lyrischen Ich zuzuweisen.',
+  figur: 'Klicke eine markierte Stelle, um sie einer Figur zuzuweisen.',
+  'formale-aspekte': 'Klicke eine markierte Stelle, um sie einem formalen Aspekt zuzuweisen.',
+};
+
 interface ReadOnlyTextPanelProps {
   doc: TextDocument;
   highlightMode: HighlightMode;
   interactionMode: InteractionMode;
+  assignTool: MarkTool | null;
   onCreateMarks: (marks: Mark[]) => void;
   onDeleteMarkGroup: (groupId: string) => void;
-  onSetWortfeldLabel: (groupId: string, value: string) => void;
-  onAssignSinnabschnitt: (groupId: string, sinnabschnittId: string) => void;
-  onCreateSinnabschnittAndAssign: (groupId: string) => void;
-  onAssignSprache: (groupId: string, sprachmittelId: string) => void;
-  onCreateSprachmittelAndAssign: (groupId: string) => void;
+  onAssignGroup: (tool: MarkTool, groupId: string, entityId: string) => void;
+  onCreateGroupAndAssign: (tool: MarkTool, groupId: string) => void;
   onExitAssignMode?: () => void;
 }
 
@@ -55,19 +62,26 @@ export function ReadOnlyTextPanel({
   doc,
   highlightMode,
   interactionMode,
+  assignTool,
   onCreateMarks,
   onDeleteMarkGroup,
-  onSetWortfeldLabel,
-  onAssignSinnabschnitt,
-  onCreateSinnabschnittAndAssign,
-  onAssignSprache,
-  onCreateSprachmittelAndAssign,
+  onAssignGroup,
+  onCreateGroupAndAssign,
   onExitAssignMode,
 }: ReadOnlyTextPanelProps) {
   const hint =
-    interactionMode === 'assign'
-      ? 'Klicke eine markierte Stelle, um ihr ein Wortfeld zuzuweisen.'
+    interactionMode === 'assign' && assignTool
+      ? ASSIGN_HINT[assignTool]
       : 'Dieser Arbeitsbereich ist gesperrt. Wechsle zu „Bearbeiten“, um den Text zu ändern — markieren kannst du hier trotzdem.';
+
+  const groups: Record<MarkTool, NamedMarkGroup[]> = {
+    wortfeld: doc.wortfelder,
+    sinnabschnitt: doc.sinnabschnitte,
+    sprache: doc.sprachmittel,
+    'lyrisches-ich': doc.lyrischesIch,
+    figur: doc.figuren,
+    'formale-aspekte': doc.formaleAspekte,
+  };
 
   return (
     <div className="editable-text-panel">
@@ -83,17 +97,14 @@ export function ReadOnlyTextPanel({
         lines={doc.lines}
         paragraphs={doc.paragraphs}
         marks={doc.marks}
-        sinnabschnitte={doc.sinnabschnitte}
-        sprachmittel={doc.sprachmittel}
+        groups={groups}
         highlightMode={highlightMode}
         interactionMode={interactionMode}
+        assignTool={assignTool}
         onCreateMarks={onCreateMarks}
         onDeleteMarkGroup={onDeleteMarkGroup}
-        onSetWortfeldLabel={onSetWortfeldLabel}
-        onAssignSinnabschnitt={onAssignSinnabschnitt}
-        onCreateSinnabschnittAndAssign={onCreateSinnabschnittAndAssign}
-        onAssignSprache={onAssignSprache}
-        onCreateSprachmittelAndAssign={onCreateSprachmittelAndAssign}
+        onAssignGroup={onAssignGroup}
+        onCreateGroupAndAssign={onCreateGroupAndAssign}
       />
     </div>
   );

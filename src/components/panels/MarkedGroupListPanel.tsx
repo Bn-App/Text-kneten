@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import type { Line, Mark } from '../../model/document';
+import type { MarkTool } from '../MarkableText';
+
 interface MarkedGroupItem {
   id: string;
   order: number;
@@ -13,8 +17,39 @@ interface MarkedGroupListPanelProps {
   summaryFieldLabel: string;
   summaryPlaceholder: string;
   emptyHint: string;
+  tool: MarkTool;
+  marks: Mark[];
+  lines: Line[];
   onRename: (id: string, title: string) => void;
   onUpdateSummary: (id: string, summary: string) => void;
+}
+
+const COLLAPSE_THRESHOLD = 3;
+
+function excerptsForItem(itemId: string, tool: MarkTool, marks: Mark[], lines: Line[]): string[] {
+  const lineById = new Map(lines.map((l) => [l.id, l]));
+  const groupsById = new Map<string, Mark[]>();
+  for (const mark of marks) {
+    if (mark.labels[tool] !== itemId) continue;
+    const arr = groupsById.get(mark.groupId) ?? [];
+    arr.push(mark);
+    groupsById.set(mark.groupId, arr);
+  }
+
+  const excerpts: { order: number; text: string }[] = [];
+  groupsById.forEach((segments) => {
+    const sorted = [...segments].sort((a, b) => {
+      const orderDiff = (lineById.get(a.lineId)?.order ?? 0) - (lineById.get(b.lineId)?.order ?? 0);
+      return orderDiff !== 0 ? orderDiff : a.startOffset - b.startOffset;
+    });
+    const text = sorted
+      .map((seg) => lineById.get(seg.lineId)?.text.slice(seg.startOffset, seg.endOffset) ?? '')
+      .join(' ')
+      .trim();
+    if (text) excerpts.push({ order: lineById.get(sorted[0].lineId)?.order ?? 0, text });
+  });
+
+  return excerpts.sort((a, b) => a.order - b.order).map((e) => e.text);
 }
 
 export function MarkedGroupListPanel({
@@ -25,10 +60,23 @@ export function MarkedGroupListPanel({
   summaryFieldLabel,
   summaryPlaceholder,
   emptyHint,
+  tool,
+  marks,
+  lines,
   onRename,
   onUpdateSummary,
 }: MarkedGroupListPanelProps) {
   const sorted = [...items].sort((a, b) => a.order - b.order);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="panel-box">
@@ -37,31 +85,55 @@ export function MarkedGroupListPanel({
         <p className="text-muted">{emptyHint}</p>
       ) : (
         <div className="sinnabschnitt-list">
-          {sorted.map((item) => (
-            <div key={item.id} className="sinnabschnitt-item">
-              <label className="panel-field">
-                <span className="panel-field-label">
-                  {titleFieldLabel} {itemNounSingular} {item.order + 1}
-                </span>
-                <input
-                  type="text"
-                  value={item.title}
-                  placeholder={`${itemNounSingular} ${item.order + 1}`}
-                  onChange={(e) => onRename(item.id, e.target.value)}
-                />
-              </label>
-              <label className="panel-field">
-                <span className="panel-field-label">{summaryFieldLabel}</span>
-                <textarea
-                  className="panel-textarea"
-                  rows={3}
-                  value={item.summary}
-                  placeholder={summaryPlaceholder}
-                  onChange={(e) => onUpdateSummary(item.id, e.target.value)}
-                />
-              </label>
-            </div>
-          ))}
+          {sorted.map((item) => {
+            const excerpts = excerptsForItem(item.id, tool, marks, lines);
+            const isExpanded = expandedIds.has(item.id);
+            const visibleExcerpts = isExpanded ? excerpts : excerpts.slice(0, COLLAPSE_THRESHOLD);
+            return (
+              <div key={item.id} className="sinnabschnitt-item">
+                <label className="panel-field">
+                  <span className="panel-field-label">
+                    {titleFieldLabel} {itemNounSingular} {item.order + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={item.title}
+                    placeholder={`${itemNounSingular} ${item.order + 1}`}
+                    onChange={(e) => onRename(item.id, e.target.value)}
+                  />
+                </label>
+
+                {excerpts.length > 0 && (
+                  <div className="panel-field">
+                    <span className="panel-field-label">Markierte Textstellen</span>
+                    <div className="marked-excerpts">
+                      {visibleExcerpts.map((text, i) => (
+                        <div key={i} className="marked-excerpt-line">
+                          „{text}“
+                        </div>
+                      ))}
+                    </div>
+                    {excerpts.length > COLLAPSE_THRESHOLD && (
+                      <button className="marked-excerpts-toggle" onClick={() => toggleExpanded(item.id)}>
+                        {isExpanded ? '▴ Weniger anzeigen' : `▾ Alle ${excerpts.length} anzeigen`}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <label className="panel-field">
+                  <span className="panel-field-label">{summaryFieldLabel}</span>
+                  <textarea
+                    className="panel-textarea"
+                    rows={3}
+                    value={item.summary}
+                    placeholder={summaryPlaceholder}
+                    onChange={(e) => onUpdateSummary(item.id, e.target.value)}
+                  />
+                </label>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -17,6 +17,9 @@ const RAIL_ITEMS: { id: MarkTool; icon: string; label: string }[] = [
   { id: 'wortfeld', icon: '🔤', label: 'Wortfelder' },
   { id: 'sinnabschnitt', icon: '📑', label: 'Beobachtungen Inhalt/Aufbau' },
   { id: 'sprache', icon: '💬', label: 'Sprache' },
+  { id: 'lyrisches-ich', icon: '👤', label: 'Lyrisches Ich' },
+  { id: 'figur', icon: '🎭', label: 'Figuren' },
+  { id: 'formale-aspekte', icon: '📐', label: 'Formale Aspekte' },
 ];
 
 export function MarkToolRail({ pinned, hidden, onHoverStart, onHoverEnd, onTogglePin, onToggleHidden }: MarkToolRailProps) {
