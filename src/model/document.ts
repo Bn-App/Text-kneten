@@ -70,7 +70,7 @@ export interface TextDocument {
   createdAt: string;
   updatedAt: string;
   sourceFileName: string;
-  sourceFileType: 'pdf' | 'image';
+  sourceFileType: 'pdf' | 'image' | 'text';
   pages: Page[];
   paragraphs: Paragraph[];
   lines: Line[];
@@ -117,6 +117,7 @@ export function backfillTextDocument(doc: TextDocument): TextDocument {
   return {
     ...doc,
     marks,
+    pages: doc.pages ?? [],
     tatte: doc.tatte ?? emptyTatteInfo(),
     hypothese: doc.hypothese ?? '',
     sinnabschnitte: doc.sinnabschnitte ?? [],

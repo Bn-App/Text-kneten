@@ -10,9 +10,11 @@ import {
 } from './model/document';
 import type { Crop } from './model/crop';
 import { FileUpload } from './components/FileUpload';
+import { PasteTextPanel } from './components/PasteTextPanel';
 import { OcrProgress } from './components/OcrProgress';
 import { EditableTextPanel, ReadOnlyTextPanel } from './components/EditableTextPanel';
 import { CollabModal } from './components/CollabModal';
+import { OriginalPageModal } from './components/OriginalPageModal';
 import { CropSelector } from './components/CropSelector';
 import { Toast } from './components/Toast';
 import { AnalysisSidebar, type NavTabId } from './components/AnalysisSidebar';
@@ -28,10 +30,11 @@ import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImage
 import { loadImageFile } from './lib/pdf/loadImageFile';
 import { recognizeImage } from './lib/ocr/runOcr';
 import { pageToLines, linesToEditableText, editableTextToLines } from './lib/ocr/reconstructText';
-import { save, list } from './lib/storage/documentStore';
+import { save, load } from './lib/storage/documentStore';
 import { useTheme } from './lib/theme/useTheme';
 import { useCollab } from './lib/collab/useCollab';
 import { downloadDocument, parseDocumentFile } from './lib/persistence/fileIO';
+import { exportAnalysisPdf } from './lib/export/exportPdf';
 import { useToast } from './lib/toast/useToast';
 import './App.css';
 
@@ -44,15 +47,15 @@ type ProcessingState =
   | { phase: 'ocr'; status: string; progress: number; cropInfo?: string }
   | { phase: 'error'; message: string };
 
-function newDocument(file: File): TextDocument {
+function newDocumentBase(title: string, sourceFileName: string, sourceFileType: TextDocument['sourceFileType']): TextDocument {
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
-    title: file.name,
+    title,
     createdAt: now,
     updatedAt: now,
-    sourceFileName: file.name,
-    sourceFileType: file.type === 'application/pdf' ? 'pdf' : 'image',
+    sourceFileName,
+    sourceFileType,
     pages: [],
     paragraphs: [],
     lines: [],
@@ -67,6 +70,17 @@ function newDocument(file: File): TextDocument {
     formaleAspekte: [],
   };
 }
+
+function newDocument(file: File): TextDocument {
+  return newDocumentBase(file.name, file.name, file.type === 'application/pdf' ? 'pdf' : 'image');
+}
+
+// Tracks which locally saved document belongs to *this* browser tab session.
+// sessionStorage (unlike localStorage) is cleared whenever the tab/browser is
+// closed, so a new student opening the page in a fresh tab never inherits a
+// previous student's work on the same shared computer — while a page reload
+// within the same tab still restores the document in progress.
+const SESSION_DOC_KEY = 'textkneten:session-doc-id';
 
 const GROUP_ARRAY_KEY: Record<
   MarkTool,
@@ -86,6 +100,7 @@ function App() {
   const [processing, setProcessing] = useState<ProcessingState>({ phase: 'idle' });
   const [theme, toggleTheme] = useTheme();
   const [collabModalOpen, setCollabModalOpen] = useState(() => location.hash.startsWith('#room='));
+  const [originalPageModalOpen, setOriginalPageModalOpen] = useState(false);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const [toastMessage, showToast] = useToast();
   const [activeView, setActiveView] = useState<MainView>('edit');
@@ -101,22 +116,47 @@ function App() {
   const [toolFilterPinned, setToolFilterPinned] = useState<MarkTool | null>(null);
   const [marksHidden, setMarksHidden] = useState(false);
 
-  // Restore the most recently worked-on document from localStorage on load,
-  // so a browser reload doesn't appear to wipe out unsaved progress.
+  // Binds a document to this tab's session and persists it, so a page reload
+  // within the same tab restores exactly this document — and only this one.
+  function activateDocument(next: TextDocument, view: MainView = 'text') {
+    setDoc(next);
+    setEditableText(linesToEditableText(next.lines));
+    save(next);
+    sessionStorage.setItem(SESSION_DOC_KEY, next.id);
+    setActiveView(view);
+  }
+
+  // Restore the document belonging to this tab's session (if any) on load, so
+  // a reload doesn't wipe out unsaved progress. A brand-new tab/session has no
+  // session-doc-id yet and therefore starts blank, even if this browser holds
+  // other students' documents from earlier on a shared computer.
   useEffect(() => {
-    const docs = list();
-    if (docs.length === 0) return;
-    const restored = docs[0];
+    const sessionDocId = sessionStorage.getItem(SESSION_DOC_KEY);
+    if (!sessionDocId) return;
+    const restored = load(sessionDocId);
+    if (!restored) return;
     setDoc(restored);
     setEditableText(linesToEditableText(restored.lines));
     setActiveView('text');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function handleNewDocument() {
+    if (doc && !confirm('Neues Dokument beginnen? Der bisherige Fortschritt bleibt zwar lokal gespeichert, wird danach aber nicht mehr automatisch geöffnet.')) {
+      return;
+    }
+    sessionStorage.removeItem(SESSION_DOC_KEY);
+    setDoc(null);
+    setEditableText('');
+    setActiveView('edit');
+    setProcessing({ phase: 'idle' });
+  }
+
   const handleRemoteDocument = useCallback((remoteDoc: TextDocument) => {
     setDoc(remoteDoc);
     setEditableText(linesToEditableText(remoteDoc.lines));
     save(remoteDoc);
+    sessionStorage.setItem(SESSION_DOC_KEY, remoteDoc.id);
   }, []);
 
   const collab = useCollab(doc, handleRemoteDocument);
@@ -161,16 +201,30 @@ function App() {
 
       newDoc.lines = allLines;
       newDoc.paragraphs = allParagraphs;
-      const text = linesToEditableText(allLines);
-
-      setDoc(newDoc);
-      setEditableText(text);
-      save(newDoc);
-      setActiveView('edit');
+      const usedPageIndices = Array.from(new Set(crops.map((c) => c.pageIndex))).sort((a, b) => a - b);
+      newDoc.pages = usedPageIndices.map((idx) => ({
+        index: idx,
+        imageDataUrl: pages[idx].canvas.toDataURL('image/jpeg', 0.85),
+        width: pages[idx].width,
+        height: pages[idx].height,
+      }));
+      activateDocument(newDoc, 'edit');
       setProcessing({ phase: 'idle' });
     } catch (err) {
       setProcessing({ phase: 'error', message: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  function handleTextPasted(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const newDoc = newDocumentBase('Eingefügter Text', 'Eingefügter Text', 'text');
+    const { lines, paragraphs } = editableTextToLines(trimmed);
+    newDoc.lines = lines;
+    newDoc.paragraphs = paragraphs;
+
+    activateDocument(newDoc, 'edit');
+    setProcessing({ phase: 'idle' });
   }
 
   function handleTextChange(text: string) {
@@ -184,6 +238,10 @@ function App() {
     if (doc) downloadDocument(doc);
   }
 
+  function handlePdfExportClick() {
+    if (doc) exportAnalysisPdf(doc);
+  }
+
   function handleConfirmBase() {
     if (!doc) return;
     save(doc);
@@ -194,10 +252,7 @@ function App() {
   async function handleLoadFile(file: File) {
     try {
       const loaded = await parseDocumentFile(file);
-      setDoc(loaded);
-      setEditableText(linesToEditableText(loaded.lines));
-      save(loaded);
-      setActiveView('text');
+      activateDocument(loaded, 'text');
       setProcessing({ phase: 'idle' });
     } catch (err) {
       setProcessing({ phase: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -321,6 +376,14 @@ function App() {
         <button className="btn" onClick={handleSaveClick} disabled={!doc} title="Fortschritt als Datei speichern">
           💾 Speichern
         </button>
+        <button
+          className="btn"
+          onClick={handlePdfExportClick}
+          disabled={!doc}
+          title="Analyse als PDF exportieren (für die Bewertung)"
+        >
+          📥 PDF Export
+        </button>
         <label className="btn" title="Gespeicherten Fortschritt laden">
           📂 Laden
           <input
@@ -351,6 +414,12 @@ function App() {
               📄 Arbeitsbereich
             </button>
           </div>
+        )}
+
+        {doc && (
+          <button className="btn" onClick={handleNewDocument} title="Eigenes neues Dokument beginnen">
+            🆕 Neu
+          </button>
         )}
 
         <div className="sep" />
@@ -410,18 +479,14 @@ function App() {
       )}
 
       <main className={activeView === 'text' && doc ? 'wide' : ''}>
-        {processing.phase !== 'cropping' &&
-          activeView !== 'hypothese' &&
-          activeView !== 'inhalt' &&
-          activeView !== 'formal' &&
-          activeView !== 'sprache' && (
-            <>
-              <p className="subtitle">
-                PDF oder Bild hochladen, Ausschnitte markieren, Text erkennen und bearbeiten.
-              </p>
-              <FileUpload onFileSelected={handleFileSelected} disabled={isBusy} />
-            </>
-          )}
+        {!doc && processing.phase !== 'cropping' && (
+          <>
+            <p className="subtitle">PDF oder Bild hochladen, Ausschnitte markieren, Text erkennen und bearbeiten.</p>
+            <FileUpload onFileSelected={handleFileSelected} disabled={isBusy} />
+            <div className="upload-alt-sep">oder</div>
+            <PasteTextPanel onTextSubmit={handleTextPasted} disabled={isBusy} />
+          </>
+        )}
 
         {processing.phase === 'rendering-pdf' && <p>PDF wird gerendert…</p>}
 
@@ -444,6 +509,7 @@ function App() {
             lines={doc.lines}
             onChange={handleTextChange}
             onConfirm={handleConfirmBase}
+            onShowOriginal={doc.pages.length > 0 ? () => setOriginalPageModalOpen(true) : undefined}
           />
         )}
 
@@ -481,6 +547,7 @@ function App() {
                   onAssignGroup={handleAssignGroup}
                   onCreateGroupAndAssign={handleCreateGroupAndAssign}
                   onExitAssignMode={handleExitAssignMode}
+                  onShowOriginal={doc.pages.length > 0 ? () => setOriginalPageModalOpen(true) : undefined}
                 />
                 <MarkToolRail
                   pinned={toolFilterPinned}
@@ -615,6 +682,12 @@ function App() {
           collab.leaveRoom();
           setCollabModalOpen(false);
         }}
+      />
+
+      <OriginalPageModal
+        pages={doc?.pages ?? []}
+        open={originalPageModalOpen}
+        onClose={() => setOriginalPageModalOpen(false)}
       />
     </div>
   );

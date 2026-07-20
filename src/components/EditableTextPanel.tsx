@@ -6,21 +6,31 @@ interface EditableTextPanelProps {
   lines: Line[];
   onChange: (text: string) => void;
   onConfirm: () => void;
+  onShowOriginal?: () => void;
 }
 
 const LOW_CONFIDENCE_THRESHOLD = 70;
 
-export function EditableTextPanel({ text, lines, onChange, onConfirm }: EditableTextPanelProps) {
+export function EditableTextPanel({ text, lines, onChange, onConfirm, onShowOriginal }: EditableTextPanelProps) {
   const lowConfidenceLines = lines.filter(
     (l) => l.confidence !== undefined && l.confidence < LOW_CONFIDENCE_THRESHOLD,
   );
 
   return (
     <div className="editable-text-panel">
-      {lowConfidenceLines.length > 0 && (
-        <p className="low-confidence-hint">
-          {lowConfidenceLines.length} Zeile(n) mit niedriger Erkennungssicherheit — bitte prüfen.
-        </p>
+      {(lowConfidenceLines.length > 0 || onShowOriginal) && (
+        <div className="editable-text-hints-row">
+          {lowConfidenceLines.length > 0 && (
+            <p className="low-confidence-hint">
+              {lowConfidenceLines.length} Zeile(n) mit niedriger Erkennungssicherheit — bitte prüfen.
+            </p>
+          )}
+          {onShowOriginal && (
+            <button className="btn" onClick={onShowOriginal}>
+              🖼️ Originalseite anzeigen
+            </button>
+          )}
+        </div>
       )}
       <textarea
         value={text}
@@ -56,6 +66,7 @@ interface ReadOnlyTextPanelProps {
   onAssignGroup: (tool: MarkTool, groupId: string, entityId: string) => void;
   onCreateGroupAndAssign: (tool: MarkTool, groupId: string) => void;
   onExitAssignMode?: () => void;
+  onShowOriginal?: () => void;
 }
 
 export function ReadOnlyTextPanel({
@@ -68,6 +79,7 @@ export function ReadOnlyTextPanel({
   onAssignGroup,
   onCreateGroupAndAssign,
   onExitAssignMode,
+  onShowOriginal,
 }: ReadOnlyTextPanelProps) {
   const hint =
     interactionMode === 'assign' && assignTool
@@ -87,6 +99,11 @@ export function ReadOnlyTextPanel({
     <div className="editable-text-panel">
       <div className="locked-hint-row">
         <p className="locked-hint">🔒 {hint}</p>
+        {onShowOriginal && (
+          <button className="btn" onClick={onShowOriginal}>
+            🖼️ Originalseite anzeigen
+          </button>
+        )}
         {interactionMode === 'assign' && onExitAssignMode && (
           <button className="btn" onClick={onExitAssignMode}>
             Fertig
