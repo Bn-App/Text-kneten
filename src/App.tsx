@@ -21,6 +21,7 @@ import { HypothesePanel } from './components/panels/HypothesePanel';
 import { PlaceholderPanel } from './components/panels/PlaceholderPanel';
 import { MarkedGroupListPanel } from './components/panels/MarkedGroupListPanel';
 import { SprachlicheMittelInfo } from './components/SprachlicheMittelInfo';
+import { LyrikInfo } from './components/LyrikInfo';
 import type { HighlightMode } from './components/MarkableText';
 import { MarkToolRail, type MarkTool } from './components/MarkToolRail';
 import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImages';
@@ -565,7 +566,12 @@ function App() {
             onUpdateSummary={handleUpdateSinnabschnittSummary}
           />
         )}
-        {doc && activeView === 'formal' && <PlaceholderPanel title="Formale Aspekte" />}
+        {doc && activeView === 'formal' && (
+          <>
+            <LyrikInfo />
+            <PlaceholderPanel title="Formale Aspekte" />
+          </>
+        )}
         {doc && activeView === 'sprache' && (
           <>
             <SprachlicheMittelInfo />

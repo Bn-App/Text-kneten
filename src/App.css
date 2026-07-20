@@ -868,6 +868,31 @@ main.wide {
   color: var(--text-muted);
 }
 
+.lyrik-section {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.lyrik-section:last-child {
+  border-bottom: none;
+}
+.lyrik-section h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+}
+.lyrik-section p {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.lyrik-section .sm-info-table {
+  min-width: 0;
+  margin-top: 4px;
+}
+.lyrik-section .sm-info-table th {
+  position: static;
+}
+
 /* ── Hypothesis generator ── */
 
 .hyp-generator {
