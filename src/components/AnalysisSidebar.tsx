@@ -142,7 +142,7 @@ export function AnalysisSidebar({
                     <div key={s.id} className="sidebar-dropdown-item-row">
                       <button
                         className={`sidebar-dropdown-item sub${highlightedSinnabschnitt === s.id ? ' active' : ''}`}
-                        onClick={() => onHighlightSinnabschnitt(s.id)}
+                        onClick={() => onHighlightSinnabschnitt(highlightedSinnabschnitt === s.id ? null : s.id)}
                       >
                         {sinnabschnittLabel(s)}
                       </button>
@@ -198,7 +198,7 @@ export function AnalysisSidebar({
                     <button
                       key={name}
                       className={`sidebar-dropdown-item sub${highlightedWortfeld === name ? ' active' : ''}`}
-                      onClick={() => onHighlightWortfeld(name)}
+                      onClick={() => onHighlightWortfeld(highlightedWortfeld === name ? null : name)}
                     >
                       {name}
                     </button>
@@ -206,7 +206,7 @@ export function AnalysisSidebar({
                   {hasAnyMarks && (
                     <button
                       className={`sidebar-dropdown-item sub${highlightedWortfeld === 'none' ? ' active' : ''}`}
-                      onClick={() => onHighlightWortfeld('none')}
+                      onClick={() => onHighlightWortfeld(highlightedWortfeld === 'none' ? null : 'none')}
                     >
                       keine Zuordnung
                     </button>
