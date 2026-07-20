@@ -523,6 +523,51 @@ main.wide {
   gap: 16px;
 }
 
+.text-with-rail {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.text-with-rail .editable-text-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+.mark-tool-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-top: 34px;
+}
+
+.mark-tool-rail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 66px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px 4px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  transition: all 0.12s;
+}
+.mark-tool-rail-btn:hover,
+.mark-tool-rail-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.mark-tool-rail-icon {
+  font-size: 1.15rem;
+}
+
 /* ── Analysis sidebar ── */
 
 .analysis-sidebar {

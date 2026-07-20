@@ -2,7 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Line, Mark, Paragraph, Sinnabschnitt } from '../model/document';
 import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captureSelection';
 
-export type HighlightMode = 'none' | 'all' | { wortfeld: string | 'none' } | { sinnabschnitt: string };
+export type HighlightMode =
+  | 'none'
+  | 'all'
+  | { wortfeld: string | 'none' }
+  | { sinnabschnitt: string }
+  | { tool: 'wortfeld' | 'sinnabschnitt' };
 export type InteractionMode = 'mark' | 'assign';
 
 interface MarkableTextProps {
@@ -53,6 +58,9 @@ function sinnabschnittLabel(s: Sinnabschnitt): string {
 
 function isMarkVisible(mark: Mark, highlightMode: HighlightMode): boolean {
   if (highlightMode === 'none' || highlightMode === 'all') return true;
+  if ('tool' in highlightMode) {
+    return highlightMode.tool === 'wortfeld' ? !!mark.labels.wortfeld : !!mark.labels.sinnabschnitt;
+  }
   if ('sinnabschnitt' in highlightMode) return mark.labels.sinnabschnitt === highlightMode.sinnabschnitt;
   const wf = mark.labels.wortfeld;
   return highlightMode.wortfeld === 'none' ? !wf : wf === highlightMode.wortfeld;

@@ -20,6 +20,7 @@ import { HypothesePanel } from './components/panels/HypothesePanel';
 import { PlaceholderPanel } from './components/panels/PlaceholderPanel';
 import { InhaltAufbauPanel } from './components/panels/InhaltAufbauPanel';
 import type { HighlightMode } from './components/MarkableText';
+import { MarkToolRail, type MarkTool } from './components/MarkToolRail';
 import { renderPdfToImages, type RenderedPage } from './lib/pdf/renderPdfToImages';
 import { loadImageFile } from './lib/pdf/loadImageFile';
 import { recognizeImage } from './lib/ocr/runOcr';
@@ -75,6 +76,8 @@ function App() {
   const [highlightedWortfeld, setHighlightedWortfeld] = useState<string | 'none' | null>(null);
   const [inhaltDropdownOpen, setInhaltDropdownOpen] = useState(false);
   const [highlightedSinnabschnitt, setHighlightedSinnabschnitt] = useState<string | null>(null);
+  const [toolFilterHover, setToolFilterHover] = useState<MarkTool | null>(null);
+  const [toolFilterPinned, setToolFilterPinned] = useState<MarkTool | null>(null);
 
   // Restore the most recently worked-on document from localStorage on load,
   // so a browser reload doesn't appear to wipe out unsaved progress.
@@ -247,6 +250,7 @@ function App() {
     setWortfeldAssignActive(true);
     setHighlightedWortfeld(null);
     setHighlightedSinnabschnitt(null);
+    setToolFilterPinned(null);
   }
 
   function handleExitAssignMode() {
@@ -257,26 +261,38 @@ function App() {
   function handleHighlightWortfeld(value: string | 'none' | null) {
     setWortfeldAssignActive(false);
     setHighlightedSinnabschnitt(null);
+    setToolFilterPinned(null);
     setHighlightedWortfeld(value);
   }
 
   function handleHighlightSinnabschnitt(id: string | null) {
     setWortfeldAssignActive(false);
     setHighlightedWortfeld(null);
+    setToolFilterPinned(null);
     setHighlightedSinnabschnitt(id);
+  }
+
+  function handleToggleToolFilterPin(tool: MarkTool) {
+    setWortfeldAssignActive(false);
+    setHighlightedWortfeld(null);
+    setHighlightedSinnabschnitt(null);
+    setToolFilterPinned((p) => (p === tool ? null : tool));
   }
 
   const isBusy = processing.phase === 'rendering-pdf' || processing.phase === 'ocr';
   const collabActive = collab.status === 'waiting' || collab.status === 'connected';
 
   const interactionMode = wortfeldAssignActive ? 'assign' : 'mark';
+  const activeToolFilter = toolFilterHover ?? toolFilterPinned;
   const highlightMode: HighlightMode = wortfeldAssignActive
     ? 'all'
-    : highlightedWortfeld !== null
-      ? { wortfeld: highlightedWortfeld }
-      : highlightedSinnabschnitt !== null
-        ? { sinnabschnitt: highlightedSinnabschnitt }
-        : 'none';
+    : activeToolFilter
+      ? { tool: activeToolFilter }
+      : highlightedWortfeld !== null
+        ? { wortfeld: highlightedWortfeld }
+        : highlightedSinnabschnitt !== null
+          ? { sinnabschnitt: highlightedSinnabschnitt }
+          : 'none';
 
   return (
     <div className="app">
@@ -426,17 +442,25 @@ function App() {
               onRenameSinnabschnitt={handleRenameSinnabschnitt}
             />
             <div className="grundlage-main">
-              <ReadOnlyTextPanel
-                doc={doc}
-                highlightMode={highlightMode}
-                interactionMode={interactionMode}
-                onCreateMarks={handleCreateMarks}
-                onDeleteMarkGroup={handleDeleteMarkGroup}
-                onSetWortfeldLabel={handleSetWortfeldLabel}
-                onAssignSinnabschnitt={handleAssignSinnabschnitt}
-                onCreateSinnabschnittAndAssign={handleCreateSinnabschnittAndAssign}
-                onExitAssignMode={handleExitAssignMode}
-              />
+              <div className="text-with-rail">
+                <ReadOnlyTextPanel
+                  doc={doc}
+                  highlightMode={highlightMode}
+                  interactionMode={interactionMode}
+                  onCreateMarks={handleCreateMarks}
+                  onDeleteMarkGroup={handleDeleteMarkGroup}
+                  onSetWortfeldLabel={handleSetWortfeldLabel}
+                  onAssignSinnabschnitt={handleAssignSinnabschnitt}
+                  onCreateSinnabschnittAndAssign={handleCreateSinnabschnittAndAssign}
+                  onExitAssignMode={handleExitAssignMode}
+                />
+                <MarkToolRail
+                  pinned={toolFilterPinned}
+                  onHoverStart={setToolFilterHover}
+                  onHoverEnd={() => setToolFilterHover(null)}
+                  onTogglePin={handleToggleToolFilterPin}
+                />
+              </div>
             </div>
           </div>
         )}
