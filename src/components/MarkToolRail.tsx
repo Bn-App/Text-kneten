@@ -2,9 +2,11 @@ export type MarkTool = 'wortfeld' | 'sinnabschnitt';
 
 interface MarkToolRailProps {
   pinned: MarkTool | null;
+  hidden: boolean;
   onHoverStart: (tool: MarkTool) => void;
   onHoverEnd: () => void;
   onTogglePin: (tool: MarkTool) => void;
+  onToggleHidden: () => void;
 }
 
 // One entry per analysis tool that produces marks in the text. Extend here
@@ -14,7 +16,7 @@ const RAIL_ITEMS: { id: MarkTool; icon: string; label: string }[] = [
   { id: 'sinnabschnitt', icon: '📑', label: 'Sinnabschnitte' },
 ];
 
-export function MarkToolRail({ pinned, onHoverStart, onHoverEnd, onTogglePin }: MarkToolRailProps) {
+export function MarkToolRail({ pinned, hidden, onHoverStart, onHoverEnd, onTogglePin, onToggleHidden }: MarkToolRailProps) {
   return (
     <div className="mark-tool-rail">
       {RAIL_ITEMS.map((item) => (
@@ -30,6 +32,17 @@ export function MarkToolRail({ pinned, onHoverStart, onHoverEnd, onTogglePin }: 
           <span className="mark-tool-rail-label">{item.label}</span>
         </button>
       ))}
+
+      <div className="mark-tool-rail-sep" />
+
+      <button
+        className={`mark-tool-rail-btn${hidden ? ' active' : ''}`}
+        title="Alle Markierungen ausblenden"
+        onClick={onToggleHidden}
+      >
+        <span className="mark-tool-rail-icon">🙈</span>
+        <span className="mark-tool-rail-label">Ausblenden</span>
+      </button>
     </div>
   );
 }

@@ -568,6 +568,12 @@ main.wide {
   font-size: 1.15rem;
 }
 
+.mark-tool-rail-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
 /* ── Analysis sidebar ── */
 
 .analysis-sidebar {

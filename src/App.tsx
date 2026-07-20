@@ -78,6 +78,7 @@ function App() {
   const [highlightedSinnabschnitt, setHighlightedSinnabschnitt] = useState<string | null>(null);
   const [toolFilterHover, setToolFilterHover] = useState<MarkTool | null>(null);
   const [toolFilterPinned, setToolFilterPinned] = useState<MarkTool | null>(null);
+  const [marksHidden, setMarksHidden] = useState(false);
 
   // Restore the most recently worked-on document from localStorage on load,
   // so a browser reload doesn't appear to wipe out unsaved progress.
@@ -251,6 +252,7 @@ function App() {
     setHighlightedWortfeld(null);
     setHighlightedSinnabschnitt(null);
     setToolFilterPinned(null);
+    setMarksHidden(false);
   }
 
   function handleExitAssignMode() {
@@ -262,6 +264,7 @@ function App() {
     setWortfeldAssignActive(false);
     setHighlightedSinnabschnitt(null);
     setToolFilterPinned(null);
+    setMarksHidden(false);
     setHighlightedWortfeld(value);
   }
 
@@ -269,6 +272,7 @@ function App() {
     setWortfeldAssignActive(false);
     setHighlightedWortfeld(null);
     setToolFilterPinned(null);
+    setMarksHidden(false);
     setHighlightedSinnabschnitt(id);
   }
 
@@ -276,7 +280,16 @@ function App() {
     setWortfeldAssignActive(false);
     setHighlightedWortfeld(null);
     setHighlightedSinnabschnitt(null);
+    setMarksHidden(false);
     setToolFilterPinned((p) => (p === tool ? null : tool));
+  }
+
+  function handleToggleMarksHidden() {
+    setWortfeldAssignActive(false);
+    setHighlightedWortfeld(null);
+    setHighlightedSinnabschnitt(null);
+    setToolFilterPinned(null);
+    setMarksHidden((h) => !h);
   }
 
   const isBusy = processing.phase === 'rendering-pdf' || processing.phase === 'ocr';
@@ -292,7 +305,9 @@ function App() {
         ? { wortfeld: highlightedWortfeld }
         : highlightedSinnabschnitt !== null
           ? { sinnabschnitt: highlightedSinnabschnitt }
-          : 'none';
+          : marksHidden
+            ? 'hidden'
+            : 'none';
 
   return (
     <div className="app">
@@ -456,9 +471,11 @@ function App() {
                 />
                 <MarkToolRail
                   pinned={toolFilterPinned}
+                  hidden={marksHidden}
                   onHoverStart={setToolFilterHover}
                   onHoverEnd={() => setToolFilterHover(null)}
                   onTogglePin={handleToggleToolFilterPin}
+                  onToggleHidden={handleToggleMarksHidden}
                 />
               </div>
             </div>

@@ -5,6 +5,7 @@ import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captur
 export type HighlightMode =
   | 'none'
   | 'all'
+  | 'hidden'
   | { wortfeld: string | 'none' }
   | { sinnabschnitt: string }
   | { tool: 'wortfeld' | 'sinnabschnitt' };
@@ -59,7 +60,7 @@ function sinnabschnittLabel(s: Sinnabschnitt): string {
 /** Whether the current highlight mode is a "show wortfeld marks" view — the
  * only situation in which we draw connector lines between same-field marks. */
 function isWortfeldView(highlightMode: HighlightMode): boolean {
-  if (highlightMode === 'none' || highlightMode === 'all') return false;
+  if (typeof highlightMode === 'string') return false;
   if ('tool' in highlightMode) return highlightMode.tool === 'wortfeld';
   return 'wortfeld' in highlightMode && highlightMode.wortfeld !== 'none';
 }
@@ -73,6 +74,7 @@ interface ConnectionLine {
 }
 
 function isMarkVisible(mark: Mark, highlightMode: HighlightMode): boolean {
+  if (highlightMode === 'hidden') return false;
   if (highlightMode === 'none' || highlightMode === 'all') return true;
   if ('tool' in highlightMode) {
     return highlightMode.tool === 'wortfeld' ? !!mark.labels.wortfeld : !!mark.labels.sinnabschnitt;
