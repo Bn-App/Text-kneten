@@ -569,11 +569,11 @@ function App() {
           <MarkedGroupListPanel
             heading="Sprache/Stil"
             items={doc.sprachmittel}
-            itemNounSingular="Sprachmittel"
+            itemNounSingular="sprachliche Auffälligkeit"
             titleFieldLabel="Bezeichnung"
             summaryFieldLabel="Beschreibung/Wirkung"
             summaryPlaceholder="Was fällt sprachlich auf, und welche Wirkung hat es?"
-            emptyHint='Noch keine Sprachmittel markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Sprache“.'
+            emptyHint='Noch keine sprachlichen Auffälligkeiten markiert. Markiere im Arbeitsbereich eine Textstelle und wähle „Sprache“.'
             onRename={handleRenameSprachmittel}
             onUpdateSummary={handleUpdateSprachmittelSummary}
           />

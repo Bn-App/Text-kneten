@@ -256,13 +256,13 @@ export function AnalysisSidebar({
             <div className="sidebar-dropdown-group">
               <div className="sidebar-dropdown-header">Sprache</div>
               {sprachmittel.length === 0 && (
-                <p className="sidebar-dropdown-empty">Noch keine Sprachmittel markiert.</p>
+                <p className="sidebar-dropdown-empty">Noch keine sprachlichen Auffälligkeiten markiert.</p>
               )}
               <div className="sidebar-dropdown-sub">
                 {renderNamedGroupList(
                   sprachmittel,
                   'sprache',
-                  'Sprachmittel',
+                  'sprachliche Auffälligkeit',
                   highlightedSprachmittel,
                   onHighlightSprachmittel,
                   onRenameSprachmittel,

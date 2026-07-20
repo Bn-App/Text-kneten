@@ -421,8 +421,8 @@ export function MarkableText({
           {creationPopover?.step === 'sprache' &&
             namedGroupPickerBody(
               sprachmittel,
-              'Sprachmittel',
-              '+ Neues Sprachmittel',
+              'sprachliche Auffälligkeit',
+              '+ Neue sprachliche Auffälligkeit',
               (id) => {
                 if (creationPopover.step === 'sprache') onAssignSprache(creationPopover.groupId, id);
               },
