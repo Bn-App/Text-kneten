@@ -392,6 +392,7 @@ function App() {
           </button>
         )}
 
+        <div className="toolbar-spacer" />
         <div className="sep" />
 
         <button className="btn" onClick={handleSaveClick} disabled={!doc} title="Fortschritt als Datei speichern">
