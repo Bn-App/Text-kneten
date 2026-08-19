@@ -162,14 +162,21 @@ function App() {
     resetToNewDocument();
   }
 
+  // Tracks whether this client is the host so handleRemoteDocument can read it
+  // without creating a circular dependency (collab is defined after this callback).
+  const isHostRef = useRef(false);
+
   const handleRemoteDocument = useCallback((remoteDoc: TextDocument) => {
     setDoc(remoteDoc);
     setEditableText(linesToEditableText(remoteDoc.lines));
     save(remoteDoc);
     sessionStorage.setItem(SESSION_DOC_KEY, remoteDoc.id);
+    // Guests jump straight to the workspace — no extra button click needed.
+    if (!isHostRef.current) setActiveView('text');
   }, []);
 
   const collab = useCollab(doc, handleRemoteDocument);
+  isHostRef.current = collab.isHost;
 
   function updateDoc(patch: Partial<TextDocument>) {
     if (!doc) return;
@@ -366,6 +373,8 @@ function App() {
 
   const isBusy = processing.phase === 'rendering-pdf' || processing.phase === 'ocr';
   const collabActive = collab.status === 'waiting' || collab.status === 'connected';
+  // True while this tab is connected as a guest (not the host).
+  const isGuestMode = collabActive && !collab.isHost;
 
   const interactionMode = assignTool ? 'assign' : 'mark';
   const activeToolFilter = toolFilterHover ?? toolFilterPinned;
@@ -386,7 +395,7 @@ function App() {
       <header id="toolbar">
         <h1>Text kneten</h1>
 
-        {doc && (
+        {doc && !isGuestMode && (
           <button className="btn" onClick={requestNewDocument} title="Eigenes neues Dokument beginnen">
             🆕 Neu
           </button>
@@ -415,12 +424,14 @@ function App() {
 
         {doc && (
           <div className="tab-switch">
-            <button
-              className={`tab-switch-btn${activeView === 'edit' ? ' active' : ''}`}
-              onClick={() => setActiveView('edit')}
-            >
-              ✏️ Bearbeiten
-            </button>
+            {!isGuestMode && (
+              <button
+                className={`tab-switch-btn${activeView === 'edit' ? ' active' : ''}`}
+                onClick={() => setActiveView('edit')}
+              >
+                ✏️ Bearbeiten
+              </button>
+            )}
             <button
               className={`tab-switch-btn${activeView === 'text' ? ' active' : ''}`}
               onClick={() => setActiveView('text')}
@@ -520,7 +531,7 @@ function App() {
         )}
         {processing.phase === 'error' && <p className="error">Fehler: {processing.message}</p>}
 
-        {doc && processing.phase !== 'cropping' && activeView === 'edit' && (
+        {doc && processing.phase !== 'cropping' && activeView === 'edit' && !isGuestMode && (
           <EditableTextPanel
             text={editableText}
             lines={doc.lines}
