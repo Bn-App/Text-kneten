@@ -183,8 +183,10 @@ export function MarkableText({
   const popoverRef = useRef<HTMLDivElement>(null);
   const pendingSegmentsRef = useRef<ReturnType<typeof captureSelectionAsSegments>>([]);
   const [creationPopover, setCreationPopover] = useState<CreationPopover | null>(null);
-  const [markPopover, setMarkPopover] = useState<{ mark: Mark; rect: DOMRect } | null>(null);
+  const [markPopover, setMarkPopover] = useState<{ mark: Mark; rect: DOMRect; step?: MarkTool } | null>(null);
   const [connectionLines, setConnectionLines] = useState<ConnectionLine[]>([]);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const lastTouchAtRef = useRef(0);
 
   const showWortfeldConnections = isWortfeldToolView(highlightMode);
 
@@ -257,7 +259,7 @@ export function MarkableText({
     marksByLine.set(mark.lineId, arr);
   }
 
-  function handleMouseUp() {
+  function trySelection() {
     if (interactionMode !== 'mark' || !rootRef.current) return;
     const segments = captureSelectionAsSegments(rootRef.current);
     if (segments.length === 0) return;
@@ -266,6 +268,21 @@ export function MarkableText({
     if (!rect) return;
     pendingSegmentsRef.current = segments;
     setCreationPopover({ step: 'color', rect });
+  }
+
+  function handleMouseUp() {
+    // Android/touch: a synthetic 'mouseup' compatibility event usually follows
+    // 'touchend' — skip it so it doesn't re-run selection capture against a
+    // selection that may have changed (or been consumed) in the meantime.
+    if (Date.now() - lastTouchAtRef.current < 500) return;
+    trySelection();
+  }
+
+  function handleTouchEnd() {
+    lastTouchAtRef.current = Date.now();
+    // Android finalizes a touch text-selection slightly after 'touchend' fires,
+    // so read the selection on the next tick rather than immediately.
+    window.setTimeout(trySelection, 60);
   }
 
   function pickColor(color: string, style: MarkStyle) {
@@ -320,17 +337,39 @@ export function MarkableText({
   }
 
   const popoverRect = creationPopover?.rect ?? markPopover?.rect ?? null;
-  // Clamp the popover so it can't render off-screen on narrow tablet/phone viewports.
-  const POPOVER_WIDTH_ESTIMATE = 230;
-  const popoverLeft = popoverRect
-    ? Math.max(8, Math.min(popoverRect.left, window.innerWidth - POPOVER_WIDTH_ESTIMATE - 8))
-    : 0;
+  const popoverContentKey = creationPopover?.step ?? markPopover?.step ?? (markPopover ? 'menu' : null);
+
+  // Measure the popover after it (re-)renders and clamp it fully inside the
+  // viewport — horizontally AND vertically — so it never gets cut off or
+  // pushed off-screen, e.g. when marking near the bottom edge while scrolled.
+  useLayoutEffect(() => {
+    if (!popoverRect || !popoverRef.current) {
+      setPopoverPos(null);
+      return;
+    }
+    const margin = 8;
+    const { width, height } = popoverRef.current.getBoundingClientRect();
+
+    let left = popoverRect.left;
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+
+    let top = popoverRect.bottom + 6;
+    if (top + height > window.innerHeight - margin) {
+      const above = popoverRect.top - height - 6;
+      top = above >= margin ? above : Math.max(margin, window.innerHeight - height - margin);
+    }
+    setPopoverPos({ top, left });
+    // popoverContentKey changes whenever the popover's step (and therefore its
+    // size) changes, so we re-measure and re-clamp for the new content.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popoverRect, popoverContentKey]);
 
   return (
     <div
       ref={rootRef}
       className={`markable-text${highlightMode === 'all' ? ' mt-dimmed' : ''}`}
       onMouseUp={handleMouseUp}
+      onTouchEnd={handleTouchEnd}
     >
       <div ref={textRef} className="mt-text-body">
         {paragraphOrder.map((paragraphId) => (
@@ -356,7 +395,11 @@ export function MarkableText({
         <div
           ref={popoverRef}
           className="mt-popover"
-          style={{ position: 'fixed', top: popoverRect.bottom + 6, left: popoverLeft }}
+          style={{
+            position: 'fixed',
+            top: (popoverPos ?? { top: popoverRect.bottom + 6, left: popoverRect.left }).top,
+            left: (popoverPos ?? { top: popoverRect.bottom + 6, left: popoverRect.left }).left,
+          }}
         >
           {creationPopover?.step === 'color' && (
             <div className="mt-color-step">
@@ -406,17 +449,33 @@ export function MarkableText({
             creationPopover.step !== 'actions' &&
             namedGroupPickerBody(creationPopover.step, creationPopover.groupId, () => setCreationPopover(null))}
 
-          {markPopover && interactionMode === 'mark' && (
-            <button
-              className="btn btn-danger"
-              onClick={() => {
-                onDeleteMarkGroup(markPopover.mark.groupId);
-                setMarkPopover(null);
-              }}
-            >
-              × Markierung entfernen
-            </button>
+          {markPopover && interactionMode === 'mark' && !markPopover.step && (
+            <div className="mt-action-list">
+              {MARK_ACTIONS.map((action) => (
+                <button
+                  key={action.id}
+                  className="mt-action-item"
+                  onClick={() => setMarkPopover((p) => (p ? { ...p, step: action.id } : p))}
+                >
+                  {action.label}
+                </button>
+              ))}
+              <button
+                className="mt-action-item muted"
+                onClick={() => {
+                  onDeleteMarkGroup(markPopover.mark.groupId);
+                  setMarkPopover(null);
+                }}
+              >
+                × Markierung entfernen
+              </button>
+            </div>
           )}
+
+          {markPopover &&
+            interactionMode === 'mark' &&
+            markPopover.step &&
+            namedGroupPickerBody(markPopover.step, markPopover.mark.groupId, () => setMarkPopover(null))}
 
           {markPopover &&
             interactionMode === 'assign' &&

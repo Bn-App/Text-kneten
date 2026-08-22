@@ -165,12 +165,46 @@ function App() {
   // Tracks whether this client is the host so handleRemoteDocument can read it
   // without creating a circular dependency (collab is defined after this callback).
   const isHostRef = useRef(false);
+  // Mirrors state that handleRemoteDocument (a stable useCallback) needs to read
+  // fresh without becoming stale or forcing useCollab to re-subscribe every render.
+  const docRef = useRef<TextDocument | null>(null);
+  docRef.current = doc;
+  const activeViewRef = useRef<MainView>(activeView);
+  activeViewRef.current = activeView;
 
   const handleRemoteDocument = useCallback((remoteDoc: TextDocument) => {
-    setDoc(remoteDoc);
-    setEditableText(linesToEditableText(remoteDoc.lines));
-    save(remoteDoc);
-    sessionStorage.setItem(SESSION_DOC_KEY, remoteDoc.id);
+    const localDoc = docRef.current;
+    if (!localDoc) {
+      setDoc(remoteDoc);
+      setEditableText(linesToEditableText(remoteDoc.lines));
+      save(remoteDoc);
+      sessionStorage.setItem(SESSION_DOC_KEY, remoteDoc.id);
+      if (!isHostRef.current) setActiveView('text');
+      return;
+    }
+
+    // Two peers can create marks or edit text at the same time. Naively
+    // replacing the whole local document with whatever snapshot just arrived
+    // would silently drop whichever side's change hadn't been broadcast yet.
+    // Union marks by id so a mark created on either side is never lost to a
+    // concurrent update from the other, and — if this client is currently
+    // typing in the Bearbeiten tab — keep the local (possibly newer) text
+    // instead of letting an incoming snapshot overwrite it mid-keystroke.
+    const markById = new Map(remoteDoc.marks.map((m) => [m.id, m] as const));
+    for (const m of localDoc.marks) {
+      if (!markById.has(m.id)) markById.set(m.id, m);
+    }
+    const isTypingLocally = activeViewRef.current === 'edit';
+    const merged: TextDocument = {
+      ...remoteDoc,
+      marks: Array.from(markById.values()),
+      ...(isTypingLocally ? { lines: localDoc.lines, paragraphs: localDoc.paragraphs } : {}),
+    };
+
+    setDoc(merged);
+    setEditableText(linesToEditableText(merged.lines));
+    save(merged);
+    sessionStorage.setItem(SESSION_DOC_KEY, merged.id);
     // Guests jump straight to the workspace — no extra button click needed.
     if (!isHostRef.current) setActiveView('text');
   }, []);
