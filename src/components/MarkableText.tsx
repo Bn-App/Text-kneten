@@ -113,56 +113,84 @@ function isMarkVisible(mark: Mark, highlightMode: HighlightMode): boolean {
   return mark.labels[highlightMode.group.tool] === highlightMode.group.id;
 }
 
+function markStyleFor(mark: Mark): CSSProperties {
+  return mark.style === 'underline'
+    ? {
+        backgroundColor: 'transparent',
+        textDecorationLine: 'underline',
+        textDecorationColor: mark.color,
+        textDecorationThickness: '3px',
+        textUnderlineOffset: '3px',
+      }
+    : { backgroundColor: mark.color };
+}
+
+/**
+ * Renders [rangeStart, rangeEnd) of a line, nesting marks whose ranges
+ * overlap within it instead of letting an earlier mark's segment silently
+ * swallow a later, overlapping one (which used to happen whenever the same
+ * passage was marked twice, e.g. once per category — only the first mark's
+ * color ever showed). The mark with the widest/earliest range becomes the
+ * outer element; whatever overlaps it nests inside, so the most recently
+ * created mark's color visually wins wherever ranges coincide, while both
+ * marks stay independently clickable.
+ */
+function renderRange(
+  text: string,
+  rangeStart: number,
+  rangeEnd: number,
+  marks: Mark[],
+  onMarkClick: (mark: Mark, rect: DOMRect) => void,
+): ReactNode {
+  if (rangeStart >= rangeEnd) return null;
+  const relevant = marks.filter((m) => m.startOffset < rangeEnd && m.endOffset > rangeStart);
+  if (relevant.length === 0) return text.slice(rangeStart, rangeEnd);
+
+  const outer = [...relevant].sort((a, b) => {
+    if (a.startOffset !== b.startOffset) return a.startOffset - b.startOffset;
+    if (a.endOffset !== b.endOffset) return b.endOffset - a.endOffset;
+    return a.createdAt.localeCompare(b.createdAt);
+  })[0];
+
+  const segStart = Math.max(outer.startOffset, rangeStart);
+  const segEnd = Math.min(outer.endOffset, rangeEnd);
+  const inner = relevant.filter((m) => m.id !== outer.id);
+
+  const parts: ReactNode[] = [];
+  const before = renderRange(text, rangeStart, segStart, marks, onMarkClick);
+  if (before !== null) parts.push(before);
+
+  const innerContent = inner.length > 0 ? renderRange(text, segStart, segEnd, inner, onMarkClick) : text.slice(segStart, segEnd);
+  parts.push(
+    <mark
+      key={outer.id}
+      data-mark-id={outer.id}
+      className={`mt-mark${outer.style === 'underline' ? ' mt-mark-underline' : ''}`}
+      style={markStyleFor(outer)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onMarkClick(outer, (e.target as HTMLElement).getBoundingClientRect());
+      }}
+    >
+      {innerContent}
+    </mark>,
+  );
+
+  const after = renderRange(text, segEnd, rangeEnd, marks, onMarkClick);
+  if (after !== null) parts.push(after);
+
+  return parts;
+}
+
 function renderLineContent(
   text: string,
   lineMarks: Mark[],
   highlightMode: HighlightMode,
   onMarkClick: (mark: Mark, rect: DOMRect) => void,
 ): ReactNode {
-  if (lineMarks.length === 0) return text;
-  const sorted = [...lineMarks].sort((a, b) => a.startOffset - b.startOffset);
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-
-  for (const mark of sorted) {
-    const start = Math.max(mark.startOffset, cursor);
-    const end = Math.max(mark.endOffset, start);
-    if (start > cursor) parts.push(text.slice(cursor, start));
-    const segText = text.slice(start, end);
-    if (segText) {
-      if (isMarkVisible(mark, highlightMode)) {
-        const markStyle: CSSProperties =
-          mark.style === 'underline'
-            ? {
-                backgroundColor: 'transparent',
-                textDecorationLine: 'underline',
-                textDecorationColor: mark.color,
-                textDecorationThickness: '3px',
-                textUnderlineOffset: '3px',
-              }
-            : { backgroundColor: mark.color };
-        parts.push(
-          <mark
-            key={mark.id}
-            data-mark-id={mark.id}
-            className={`mt-mark${mark.style === 'underline' ? ' mt-mark-underline' : ''}`}
-            style={markStyle}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMarkClick(mark, (e.target as HTMLElement).getBoundingClientRect());
-            }}
-          >
-            {segText}
-          </mark>,
-        );
-      } else {
-        parts.push(segText);
-      }
-    }
-    cursor = end;
-  }
-  if (cursor < text.length) parts.push(text.slice(cursor));
-  return parts;
+  const visible = lineMarks.filter((m) => isMarkVisible(m, highlightMode));
+  if (visible.length === 0) return text;
+  return renderRange(text, 0, text.length, visible, onMarkClick);
 }
 
 export function MarkableText({
