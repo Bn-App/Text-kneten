@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Line, Mark, MarkStyle, NamedMarkGroup, Paragraph } from '../model/document';
 import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captureSelection';
+import { computeTextRows, type TextRow } from '../lib/text/lineNumbers';
 
 export type MarkTool = 'wortfeld' | 'sinnabschnitt' | 'sprache' | 'lyrisches-ich' | 'figur' | 'formale-aspekte';
 
@@ -182,15 +183,25 @@ function renderRange(
   return parts;
 }
 
-function renderLineContent(
+/** Renders a line as its numbered rows. Rows are contiguous slices of the line
+ * text, so the line element's textContent still equals line.text exactly. */
+function renderLineRows(
   text: string,
+  rows: TextRow[],
   lineMarks: Mark[],
   highlightMode: HighlightMode,
   onMarkClick: (mark: Mark, rect: DOMRect) => void,
 ): ReactNode {
   const visible = lineMarks.filter((m) => isMarkVisible(m, highlightMode));
-  if (visible.length === 0) return text;
-  return renderRange(text, 0, text.length, visible, onMarkClick);
+  return rows.map((row) => (
+    <div
+      key={row.start}
+      className={`mt-row${row.number !== null && row.number % 5 === 0 ? ' mt-row-fifth' : ''}`}
+      data-line-no={row.number ?? undefined}
+    >
+      {visible.length === 0 ? text.slice(row.start, row.end) : renderRange(text, row.start, row.end, visible, onMarkClick)}
+    </div>
+  ));
 }
 
 export function MarkableText({
@@ -228,8 +239,13 @@ export function MarkableText({
     function recompute() {
       const containerRect = container.getBoundingClientRect();
       const centersByField = new Map<string, { x: number; y: number }[]>();
+      const seenMarkIds = new Set<string>();
 
       container.querySelectorAll<HTMLElement>('mark[data-mark-id]').forEach((el) => {
+        // A mark wrapped across two numbered rows renders as two elements — connect it only once.
+        const markId = el.dataset.markId ?? '';
+        if (seenMarkIds.has(markId)) return;
+        seenMarkIds.add(markId);
         const mark = marks.find((m) => m.id === el.dataset.markId);
         const field = mark?.labels.wortfeld;
         if (!field) return;
@@ -280,6 +296,7 @@ export function MarkableText({
     arr.push(line);
     linesByParagraph.set(line.paragraphId, arr);
   }
+  const rowsByLine = useMemo(() => computeTextRows(lines), [lines]);
   const marksByLine = new Map<string, Mark[]>();
   for (const mark of marks) {
     const arr = marksByLine.get(mark.lineId) ?? [];
@@ -404,7 +421,13 @@ export function MarkableText({
           <div key={paragraphId} className="mt-paragraph">
             {(linesByParagraph.get(paragraphId) ?? []).map((line) => (
               <div key={line.id} data-line-id={line.id} className="mt-line">
-                {renderLineContent(line.text, marksByLine.get(line.id) ?? [], highlightMode, handleMarkClick)}
+                {renderLineRows(
+                  line.text,
+                  rowsByLine.get(line.id) ?? [],
+                  marksByLine.get(line.id) ?? [],
+                  highlightMode,
+                  handleMarkClick,
+                )}
               </div>
             ))}
           </div>

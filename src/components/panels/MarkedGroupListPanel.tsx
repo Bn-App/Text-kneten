@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Line, Mark } from '../../model/document';
 import type { MarkTool } from '../MarkableText';
 import { excerptsForItem } from '../../lib/marks/excerpts';
+import { ConfirmDialog } from '../ConfirmDialog';
 
 interface MarkedGroupItem {
   id: string;
@@ -23,6 +24,7 @@ interface MarkedGroupListPanelProps {
   lines: Line[];
   onRename: (id: string, title: string) => void;
   onUpdateSummary: (id: string, summary: string) => void;
+  onDelete: (id: string) => void;
 }
 
 const COLLAPSE_THRESHOLD = 3;
@@ -44,10 +46,12 @@ export function MarkedGroupListPanel({
   lines,
   onRename,
   onUpdateSummary,
+  onDelete,
 }: MarkedGroupListPanelProps) {
   const sorted = [...items].sort((a, b) => a.order - b.order);
   const [expandedExcerptIds, setExpandedExcerptIds] = useState<Set<string>>(new Set());
   const [collapsedItemIds, setCollapsedItemIds] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<MarkedGroupItem | null>(null);
 
   function toggleExcerptsExpanded(id: string) {
     setExpandedExcerptIds((prev) => {
@@ -82,16 +86,25 @@ export function MarkedGroupListPanel({
 
             return (
               <div key={item.id} className="sinnabschnitt-item">
-                <button
-                  className="sinnabschnitt-item-header"
-                  onClick={() => toggleItemCollapsed(item.id)}
-                  title={isCollapsed ? 'Ausklappen' : 'Einklappen'}
-                >
-                  <span className={`sinnabschnitt-item-arrow${isCollapsed ? '' : ' open'}`}>›</span>
-                  <span className="sinnabschnitt-item-title">
-                    {item.order + 1}. {itemDisplayTitle(item, itemNounSingular)}
-                  </span>
-                </button>
+                <div className="sinnabschnitt-item-header-row">
+                  <button
+                    className="sinnabschnitt-item-header"
+                    onClick={() => toggleItemCollapsed(item.id)}
+                    title={isCollapsed ? 'Ausklappen' : 'Einklappen'}
+                  >
+                    <span className={`sinnabschnitt-item-arrow${isCollapsed ? '' : ' open'}`}>›</span>
+                    <span className="sinnabschnitt-item-title">
+                      {item.order + 1}. {itemDisplayTitle(item, itemNounSingular)}
+                    </span>
+                  </button>
+                  <button
+                    className="sinnabschnitt-item-delete"
+                    onClick={() => setPendingDelete(item)}
+                    title="Löschen"
+                  >
+                    🗑
+                  </button>
+                </div>
 
                 {!isCollapsed && (
                   <>
@@ -111,9 +124,10 @@ export function MarkedGroupListPanel({
                       <div className="panel-field">
                         <span className="panel-field-label">Markierte Textstellen</span>
                         <div className="marked-excerpts">
-                          {visibleExcerpts.map((text, i) => (
+                          {visibleExcerpts.map((excerpt, i) => (
                             <div key={i} className="marked-excerpt-line">
-                              „{text}“
+                              <span className="marked-excerpt-text">„{excerpt.text}“</span>
+                              {excerpt.lineRef && <span className="marked-excerpt-ref">({excerpt.lineRef})</span>}
                             </div>
                           ))}
                         </div>
@@ -142,6 +156,17 @@ export function MarkedGroupListPanel({
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`${itemNounSingular} löschen?`}
+        message={`„${pendingDelete ? itemDisplayTitle(pendingDelete, itemNounSingular) : ''}“ wird gelöscht. Die zugehörigen Markierungen verschwinden dabei auch im Text — sofern sie nicht noch einer anderen Kategorie zugeordnet sind.`}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) onDelete(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }

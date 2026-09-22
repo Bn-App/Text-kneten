@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import type { Line, Mark, NamedMarkGroup, TextDocument } from '../../model/document';
 import type { MarkTool } from '../../components/MarkableText';
 import { excerptsForItem } from '../marks/excerpts';
-import { linesToEditableText } from '../ocr/reconstructText';
+import { computeTextRows } from '../text/lineNumbers';
 
 const MARGIN = 18;
 const PAGE_WIDTH = 210;
@@ -72,6 +72,32 @@ function addDivider(ctx: ExportContext) {
   ctx.y += 6;
 }
 
+const LINE_NUMBER_GUTTER = 12;
+
+/** Prints the base text row by row — wrapped exactly like the Arbeitsbereich — with
+ * every fifth line number in the left margin, so excerpt references ("Z. 12") match. */
+function addNumberedText(ctx: ExportContext, lines: Line[]) {
+  const rowsByLine = computeTextRows(lines);
+  const sorted = [...lines].sort((a, b) => a.order - b.order);
+  sorted.forEach((line, i) => {
+    if (i > 0 && line.paragraphId !== sorted[i - 1].paragraphId) addSpacer(ctx, 2);
+    for (const row of rowsByLine.get(line.id) ?? []) {
+      ensureSpace(ctx, LINE_HEIGHT);
+      if (row.number !== null && row.number % 5 === 0) {
+        ctx.doc.setFont('helvetica', 'normal');
+        ctx.doc.setFontSize(8);
+        ctx.doc.setTextColor(140, 140, 140);
+        ctx.doc.text(String(row.number), MARGIN + LINE_NUMBER_GUTTER - 4, ctx.y, { align: 'right' });
+      }
+      ctx.doc.setFont('helvetica', 'normal');
+      ctx.doc.setFontSize(10.5);
+      ctx.doc.setTextColor(40, 40, 40);
+      ctx.doc.text(line.text.slice(row.start, row.end).trimEnd(), MARGIN + LINE_NUMBER_GUTTER, ctx.y);
+      ctx.y += LINE_HEIGHT;
+    }
+  });
+}
+
 interface GroupSectionSpec {
   heading: string;
   tool: MarkTool;
@@ -96,7 +122,9 @@ function addGroupSection(ctx: ExportContext, spec: GroupSectionSpec, marks: Mark
     addSubheading(ctx, `${item.order + 1}. ${title}`);
 
     const excerpts = excerptsForItem(item.id, spec.tool, marks, lines);
-    excerpts.forEach((text) => addParagraph(ctx, `„${text}“`, { italic: true, indent: 4, color: [95, 95, 95] }));
+    excerpts.forEach(({ text, lineRef }) =>
+      addParagraph(ctx, `„${text}“${lineRef ? ` (${lineRef})` : ''}`, { italic: true, indent: 4, color: [95, 95, 95] }),
+    );
 
     const summary = item.summary.trim();
     addParagraph(ctx, `${spec.summaryLabel}: ${summary || '—'}`, {
@@ -142,12 +170,7 @@ export function exportAnalysisPdf(doc: TextDocument): void {
   addDivider(ctx);
 
   addHeading(ctx, 'Arbeitsbereich (Grundlagentext)');
-  const fullText = linesToEditableText(doc.lines);
-  const paragraphs = fullText.split(/\n{2,}/);
-  paragraphs.forEach((para, i) => {
-    para.split('\n').forEach((line) => addParagraph(ctx, line));
-    if (i < paragraphs.length - 1) addSpacer(ctx, 2);
-  });
+  addNumberedText(ctx, doc.lines);
   addSpacer(ctx, 4);
   addDivider(ctx);
 

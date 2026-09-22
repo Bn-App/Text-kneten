@@ -919,11 +919,18 @@ main.wide {
   margin-bottom: 0;
 }
 
+.sinnabschnitt-item-header-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .sinnabschnitt-item-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   border: none;
   background: none;
   color: var(--text);
@@ -931,6 +938,22 @@ main.wide {
   padding: 0;
   text-align: left;
   font: inherit;
+}
+
+.sinnabschnitt-item-delete {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.sinnabschnitt-item-delete:hover {
+  color: #b91c1c;
+  background: #fee2e2;
 }
 
 .sinnabschnitt-item-arrow {
@@ -965,6 +988,14 @@ main.wide {
   border-radius: 0 6px 6px 0;
   padding: 5px 9px;
   line-height: 1.4;
+}
+
+.marked-excerpt-ref {
+  margin-left: 6px;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--accent);
 }
 
 .marked-excerpts-toggle {
@@ -1142,10 +1173,15 @@ main.wide {
   font: 15px/1.6 ui-monospace, Consolas, monospace;
   color: var(--text);
   user-select: text;
+  container-type: inline-size;
 }
 
 .mt-text-body {
+  --mt-gutter: 40px;
   position: relative;
+  /* Rows are pre-wrapped at 60 characters; shrink the font on narrow screens so
+     one row still fits on one visual line and line numbers stay accurate. */
+  font-size: min(15px, calc((100cqi - var(--mt-gutter)) / 37));
 }
 
 .mt-paragraph {
@@ -1172,6 +1208,29 @@ main.wide {
 
 .mt-line {
   white-space: pre-wrap;
+}
+
+/* Line numbers live in a ::before pseudo-element so they never become part of
+   the line's text content (selection offsets are computed from textContent). */
+.mt-row {
+  position: relative;
+  padding-left: var(--mt-gutter);
+}
+.mt-row[data-line-no]::before {
+  content: attr(data-line-no);
+  position: absolute;
+  left: 0;
+  width: calc(var(--mt-gutter) - 12px);
+  text-align: right;
+  font-size: 0.72em;
+  color: var(--text-muted);
+  opacity: 0.55;
+  user-select: none;
+  pointer-events: none;
+}
+.mt-row.mt-row-fifth::before {
+  opacity: 1;
+  font-weight: 700;
 }
 
 .mt-mark {

@@ -360,6 +360,29 @@ function App() {
     updateDoc({ [key]: items.map((it) => (it.id === id ? { ...it, summary } : it)) } as Partial<TextDocument>);
   }
 
+  // Deletes a named entry (e.g. a Sinnabschnitt) from its tab list and strips its
+  // label from every mark that carried it. A mark left with no labels at all is
+  // removed outright, so its highlight actually disappears from the text — but a
+  // mark still tagged under another category (multi-tagged) keeps showing for that.
+  function handleDeleteGroup(tool: MarkTool, id: string) {
+    if (!doc) return;
+    const key = GROUP_ARRAY_KEY[tool];
+    const items = doc[key];
+    const updatedMarks = doc.marks
+      .map((m) => {
+        if (m.labels[tool] !== id) return m;
+        const nextLabels = { ...m.labels };
+        delete nextLabels[tool];
+        return { ...m, labels: nextLabels };
+      })
+      .filter((m) => Object.keys(m.labels).length > 0);
+    updateDoc({
+      [key]: items.filter((it) => it.id !== id),
+      marks: updatedMarks,
+    } as Partial<TextDocument>);
+    if (highlightedGroup?.tool === tool && highlightedGroup.id === id) setHighlightedGroup(null);
+  }
+
   function handleTatteChange(tatte: TatteInfo) {
     updateDoc({ tatte });
   }
@@ -642,6 +665,7 @@ function App() {
               lines={doc.lines}
               onRename={(id, title) => handleRenameGroup('sinnabschnitt', id, title)}
               onUpdateSummary={(id, summary) => handleUpdateGroupSummary('sinnabschnitt', id, summary)}
+              onDelete={(id) => handleDeleteGroup('sinnabschnitt', id)}
             />
             <MarkedGroupListPanel
               heading="Lyrisches Ich"
@@ -656,6 +680,7 @@ function App() {
               lines={doc.lines}
               onRename={(id, title) => handleRenameGroup('lyrisches-ich', id, title)}
               onUpdateSummary={(id, summary) => handleUpdateGroupSummary('lyrisches-ich', id, summary)}
+              onDelete={(id) => handleDeleteGroup('lyrisches-ich', id)}
             />
             <MarkedGroupListPanel
               heading="Figuren"
@@ -670,6 +695,7 @@ function App() {
               lines={doc.lines}
               onRename={(id, title) => handleRenameGroup('figur', id, title)}
               onUpdateSummary={(id, summary) => handleUpdateGroupSummary('figur', id, summary)}
+              onDelete={(id) => handleDeleteGroup('figur', id)}
             />
           </>
         )}
@@ -690,6 +716,7 @@ function App() {
               lines={doc.lines}
               onRename={(id, title) => handleRenameGroup('formale-aspekte', id, title)}
               onUpdateSummary={(id, summary) => handleUpdateGroupSummary('formale-aspekte', id, summary)}
+              onDelete={(id) => handleDeleteGroup('formale-aspekte', id)}
             />
           </>
         )}
@@ -709,6 +736,7 @@ function App() {
               lines={doc.lines}
               onRename={(id, title) => handleRenameGroup('wortfeld', id, title)}
               onUpdateSummary={(id, summary) => handleUpdateGroupSummary('wortfeld', id, summary)}
+              onDelete={(id) => handleDeleteGroup('wortfeld', id)}
             />
             <MarkedGroupListPanel
               heading="Sprache/Stil"
@@ -723,6 +751,7 @@ function App() {
               lines={doc.lines}
               onRename={(id, title) => handleRenameGroup('sprache', id, title)}
               onUpdateSummary={(id, summary) => handleUpdateGroupSummary('sprache', id, summary)}
+              onDelete={(id) => handleDeleteGroup('sprache', id)}
             />
           </>
         )}
