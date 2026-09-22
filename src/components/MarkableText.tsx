@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Line, Mark, MarkStyle, NamedMarkGroup, Paragraph } from '../model/document';
 import { captureSelectionAsSegments, segmentsToMarks } from '../lib/marks/captureSelection';
-import { computeTextRows, type TextRow } from '../lib/text/lineNumbers';
+import { computeTextRows, setRowWidth, useRowWidth, type TextRow } from '../lib/text/lineNumbers';
 
 export type MarkTool = 'wortfeld' | 'sinnabschnitt' | 'sprache' | 'lyrisches-ich' | 'figur' | 'formale-aspekte';
 
@@ -229,6 +229,32 @@ export function MarkableText({
 
   const showWortfeldConnections = isWortfeldToolView(highlightMode);
 
+  // The text is monospaced, so how many characters fit on one visual line
+  // follows directly from the available width. Rows are wrapped explicitly at
+  // that count (instead of leaving it to the browser), which lets the excerpt
+  // references and the PDF export reproduce exactly the same line numbers.
+  useLayoutEffect(() => {
+    const body = textRef.current;
+    if (!body) return;
+    function measure() {
+      if (!body) return;
+      const probe = document.createElement('span');
+      probe.textContent = '0'.repeat(100);
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;';
+      body.appendChild(probe);
+      const charWidth = probe.getBoundingClientRect().width / 100;
+      probe.remove();
+      const gutter = parseFloat(getComputedStyle(body).getPropertyValue('--mt-gutter')) || 0;
+      // Small safety margin for the horizontal padding marks add around their text.
+      const available = body.clientWidth - gutter - 6;
+      if (charWidth > 0 && available > 0) setRowWidth(Math.max(20, Math.floor(available / charWidth)));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
+
   useLayoutEffect(() => {
     if (!showWortfeldConnections || !textRef.current) {
       setConnectionLines([]);
@@ -296,7 +322,8 @@ export function MarkableText({
     arr.push(line);
     linesByParagraph.set(line.paragraphId, arr);
   }
-  const rowsByLine = useMemo(() => computeTextRows(lines), [lines]);
+  const rowWidth = useRowWidth();
+  const rowsByLine = useMemo(() => computeTextRows(lines, rowWidth), [lines, rowWidth]);
   const marksByLine = new Map<string, Mark[]>();
   for (const mark of marks) {
     const arr = marksByLine.get(mark.lineId) ?? [];

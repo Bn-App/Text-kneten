@@ -9,9 +9,15 @@ export interface Excerpt {
 }
 
 /** Quoted, reading-order snippets of text that were marked and assigned to a given named entry. */
-export function excerptsForItem(itemId: string, tool: MarkTool, marks: Mark[], lines: Line[]): Excerpt[] {
+export function excerptsForItem(
+  itemId: string,
+  tool: MarkTool,
+  marks: Mark[],
+  lines: Line[],
+  rowWidth?: number,
+): Excerpt[] {
   const lineById = new Map(lines.map((l) => [l.id, l]));
-  const rowsByLine = computeTextRows(lines);
+  const rowsByLine = computeTextRows(lines, rowWidth);
   const groupsById = new Map<string, Mark[]>();
   for (const mark of marks) {
     if (mark.labels[tool] !== itemId) continue;

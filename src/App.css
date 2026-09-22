@@ -1173,15 +1173,11 @@ main.wide {
   font: 15px/1.6 ui-monospace, Consolas, monospace;
   color: var(--text);
   user-select: text;
-  container-type: inline-size;
 }
 
 .mt-text-body {
   --mt-gutter: 40px;
   position: relative;
-  /* Rows are pre-wrapped at 60 characters; shrink the font on narrow screens so
-     one row still fits on one visual line and line numbers stay accurate. */
-  font-size: min(15px, calc((100cqi - var(--mt-gutter)) / 37));
 }
 
 .mt-paragraph {
@@ -1212,9 +1208,12 @@ main.wide {
 
 /* Line numbers live in a ::before pseudo-element so they never become part of
    the line's text content (selection offsets are computed from textContent). */
+/* Rows are already wrapped to the measured width (see MarkableText), so the
+   browser must not wrap them a second time. */
 .mt-row {
   position: relative;
   padding-left: var(--mt-gutter);
+  white-space: pre;
 }
 .mt-row[data-line-no]::before {
   content: attr(data-line-no);

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Line, Mark } from '../../model/document';
 import type { MarkTool } from '../MarkableText';
 import { excerptsForItem } from '../../lib/marks/excerpts';
+import { useRowWidth } from '../../lib/text/lineNumbers';
 import { ConfirmDialog } from '../ConfirmDialog';
 
 interface MarkedGroupItem {
@@ -49,6 +50,7 @@ export function MarkedGroupListPanel({
   onDelete,
 }: MarkedGroupListPanelProps) {
   const sorted = [...items].sort((a, b) => a.order - b.order);
+  const rowWidth = useRowWidth();
   const [expandedExcerptIds, setExpandedExcerptIds] = useState<Set<string>>(new Set());
   const [collapsedItemIds, setCollapsedItemIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<MarkedGroupItem | null>(null);
@@ -80,7 +82,7 @@ export function MarkedGroupListPanel({
         <div className="sinnabschnitt-list">
           {sorted.map((item) => {
             const isCollapsed = collapsedItemIds.has(item.id);
-            const excerpts = excerptsForItem(item.id, tool, marks, lines);
+            const excerpts = excerptsForItem(item.id, tool, marks, lines, rowWidth);
             const isExcerptsExpanded = expandedExcerptIds.has(item.id);
             const visibleExcerpts = isExcerptsExpanded ? excerpts : excerpts.slice(0, COLLAPSE_THRESHOLD);
 

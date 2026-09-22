@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import type { Line, Mark, NamedMarkGroup, TextDocument } from '../../model/document';
 import type { MarkTool } from '../../components/MarkableText';
 import { excerptsForItem } from '../marks/excerpts';
-import { computeTextRows } from '../text/lineNumbers';
+import { computeTextRows, getRowWidth } from '../text/lineNumbers';
 
 const MARGIN = 18;
 const PAGE_WIDTH = 210;
@@ -73,12 +73,27 @@ function addDivider(ctx: ExportContext) {
 }
 
 const LINE_NUMBER_GUTTER = 12;
+const TEXT_FONT_SIZE = 10.5;
 
 /** Prints the base text row by row — wrapped exactly like the Arbeitsbereich — with
  * every fifth line number in the left margin, so excerpt references ("Z. 12") match. */
 function addNumberedText(ctx: ExportContext, lines: Line[]) {
-  const rowsByLine = computeTextRows(lines);
+  const rowsByLine = computeTextRows(lines, getRowWidth());
   const sorted = [...lines].sort((a, b) => a.order - b.order);
+
+  // Rows follow the Arbeitsbereich's width and must not be re-wrapped here, so
+  // shrink the font until the longest row fits the printable width.
+  ctx.doc.setFont('helvetica', 'normal');
+  ctx.doc.setFontSize(TEXT_FONT_SIZE);
+  const available = CONTENT_WIDTH - LINE_NUMBER_GUTTER;
+  let widest = 0;
+  for (const line of sorted) {
+    for (const row of rowsByLine.get(line.id) ?? []) {
+      widest = Math.max(widest, ctx.doc.getTextWidth(line.text.slice(row.start, row.end).trimEnd()));
+    }
+  }
+  const fontSize = widest > available ? (TEXT_FONT_SIZE * available) / widest : TEXT_FONT_SIZE;
+
   sorted.forEach((line, i) => {
     if (i > 0 && line.paragraphId !== sorted[i - 1].paragraphId) addSpacer(ctx, 2);
     for (const row of rowsByLine.get(line.id) ?? []) {
@@ -90,7 +105,7 @@ function addNumberedText(ctx: ExportContext, lines: Line[]) {
         ctx.doc.text(String(row.number), MARGIN + LINE_NUMBER_GUTTER - 4, ctx.y, { align: 'right' });
       }
       ctx.doc.setFont('helvetica', 'normal');
-      ctx.doc.setFontSize(10.5);
+      ctx.doc.setFontSize(fontSize);
       ctx.doc.setTextColor(40, 40, 40);
       ctx.doc.text(line.text.slice(row.start, row.end).trimEnd(), MARGIN + LINE_NUMBER_GUTTER, ctx.y);
       ctx.y += LINE_HEIGHT;
